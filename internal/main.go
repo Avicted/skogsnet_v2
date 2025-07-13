@@ -29,6 +29,7 @@ var (
 	portName   = flag.String("port", "/dev/ttyACM0", "Serial port name")
 	baudRate   = flag.Int("baud", 9600, "Serial baud rate")
 	dbFileName = "measurements.db"
+	exportCSV  = flag.String("export-csv", "", "Export measurements to CSV file and exit")
 )
 
 func initialize_serial_connection() (*enumerator.PortDetails, error) {
@@ -118,6 +119,29 @@ func insertMeasurement(db *sql.DB, m Measurement) error {
 	return err
 }
 
+func exportToCSV(db *sql.DB, filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	rows, err := db.Query("SELECT timestamp, temperature, humidity FROM measurements ORDER BY timestamp")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	fmt.Fprintln(file, "timestamp,temperature,humidity")
+	for rows.Next() {
+		var ts int64
+		var temp, hum float64
+		if err := rows.Scan(&ts, &temp, &hum); err != nil {
+			return err
+		}
+		fmt.Fprintf(file, "%d,%.2f,%.2f\n", ts, temp, hum)
+	}
+	return nil
+}
+
 func printToConsole(measurement Measurement) {
 	t := time.UnixMilli(measurement.UnixTimestamp)
 
@@ -136,6 +160,20 @@ func printToConsole(measurement Measurement) {
 
 func main() {
 	flag.Parse()
+
+	if *exportCSV != "" {
+		db, err := openDatabase(dbFileName)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		defer db.Close()
+		if err := exportToCSV(db, *exportCSV); err != nil {
+			log.Fatalf("Export to CSV failed: %v", err)
+		}
+		fmt.Printf("Exported measurements to %s\n", *exportCSV)
+		return
+	}
 
 	fmt.Println("Skogsnet v2")
 

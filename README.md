@@ -8,6 +8,7 @@ Skogsnet v2 is a Go application for reading temperature and humidity measurement
 - Saves measurements to a SQLite database (`measurements.db`)
 - Prints each measurement to the console with a readable timestamp
 - Handles graceful shutdown on Ctrl+C or SIGTERM
+- Exports measurements to a CSV file if specified
 
 ## Requirements
 
@@ -51,16 +52,19 @@ The database filename is set by the `dbFileName` variable in the code
 - Measurements are stored in a SQLite database file named `measurements.db`.
 - Console output example:
   ```
-  Measurement at 2025-07-13 14:23:15: Temperature = 23.66 °C, Humidity = 77.38%
+  Measurement at 2025-07-13 18:23:12
+    Temperature: 23.78 °C
+    Humidity:    74.44 %
   ```
 
-## Configuration
 
-- The serial port is currently hardcoded to `/dev/ttyACM0`.  
-  To change, edit the `portName` constant in `internal/main.go`.
-- The baud rate is set to 9600.
-- The measurement database file is named `measurements.db`
-  To change, edit the `measurementFileName` constant in `internal/main.go`.
+## Export to CSV
+You can export measurements to a CSV file by using the `--export-csv` flag:
+
+```sh
+./build/skogsnet_v2 --export-csv=measurements.csv
+```
+
 
 ## License
 MIT License

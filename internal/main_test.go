@@ -109,3 +109,46 @@ func TestEndToEndMeasurementFlow(t *testing.T) {
 		t.Errorf("Expected (21.1, 44.2), got (%v, %v)", temp, hum)
 	}
 }
+
+func TestExportToCSV(t *testing.T) {
+	tmpDB := "test_export.db"
+	defer os.Remove(tmpDB)
+
+	db, err := openDatabase(tmpDB)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	m1 := Measurement{
+		UnixTimestamp:      time.Now().UnixMilli(),
+		TemperatureCelsius: 20.0,
+		HumidityPercentage: 50.0,
+	}
+	m2 := Measurement{
+		UnixTimestamp:      time.Now().UnixMilli() + 1000,
+		TemperatureCelsius: 22.0,
+		HumidityPercentage: 55.0,
+	}
+
+	if err := insertMeasurement(db, m1); err != nil {
+		t.Errorf("Failed to insert first measurement: %v", err)
+	}
+	if err := insertMeasurement(db, m2); err != nil {
+		t.Errorf("Failed to insert second measurement: %v", err)
+	}
+
+	csvFile := "test_export.csv"
+	if err := exportToCSV(db, csvFile); err != nil {
+		t.Fatalf("Failed to export to CSV: %v", err)
+	}
+	defer os.Remove(csvFile)
+
+	fileInfo, err := os.Stat(csvFile)
+	if err != nil {
+		t.Fatalf("CSV file does not exist after export: %v", err)
+	}
+	if fileInfo.Size() == 0 {
+		t.Error("CSV file is empty after export")
+	}
+}
