@@ -72,7 +72,7 @@ Usage of ./build/skogsnet_v2:
 
 - **Features:**  
   - Interactive chart with dual axes (°C and %)
-  - Time range selection: 1h, today, week, month, year, all
+  - Time range selection: 1h, 6h, 12h, 24h, today, week, month, year, all
   - Live data updates (toggleable)
   - Responsive dark mode design
   - 24h time labels

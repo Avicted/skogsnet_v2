@@ -16,6 +16,12 @@ func serveAPI(db *sql.DB) {
 		switch rangeParam {
 		case "1h":
 			since = now.Add(-1 * time.Hour).UnixMilli()
+		case "6h":
+			since = now.Add(-6 * time.Hour).UnixMilli()
+		case "12h":
+			since = now.Add(-12 * time.Hour).UnixMilli()
+		case "24h":
+			since = now.Add(-24 * time.Hour).UnixMilli()
 		case "today":
 			since = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).UnixMilli()
 		case "week":
