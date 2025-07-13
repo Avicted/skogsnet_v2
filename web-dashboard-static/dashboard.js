@@ -12,12 +12,32 @@ document.addEventListener('DOMContentLoaded', function () {
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     }
 
+    function movingAverage(arr, windowSize) {
+        if (windowSize <= 1) return arr;
+        return arr.map((_, i, a) => {
+            const start = Math.max(0, i - windowSize + 1);
+            const window = a.slice(start, i + 1);
+            return window.reduce((sum, v) => sum + v, 0) / window.length;
+        });
+    }
+
     async function drawChart() {
         const range = document.getElementById('range').value;
         const data = await fetchData(range);
+
+        // Show current temp/humidity (latest data point)
+        if (data.length > 0) {
+            const latest = data[data.length - 1];
+            document.getElementById('current-temp').textContent = `Temperature: ${latest.TemperatureCelsius.toFixed(2)} °C`;
+            document.getElementById('current-hum').textContent = `Humidity: ${latest.HumidityPercentage.toFixed(2)} %`;
+        } else {
+            document.getElementById('current-temp').textContent = "Temperature: -- °C";
+            document.getElementById('current-hum').textContent = "Humidity: -- %";
+        }
+
         const labels = data.map(m => format24h(m.UnixTimestamp));
-        const temp = data.map(m => m.TemperatureCelsius);
-        const hum = data.map(m => m.HumidityPercentage);
+        const temp = movingAverage(data.map(m => m.TemperatureCelsius), 5);
+        const hum = movingAverage(data.map(m => m.HumidityPercentage), 5);
 
         const ctx = document.getElementById('chart').getContext('2d');
         const chartOptions = {
@@ -69,7 +89,8 @@ document.addEventListener('DOMContentLoaded', function () {
                             backgroundColor: '#ff7043',
                             fill: false,
                             tension: 0.4,
-                            yAxisID: 'y'
+                            yAxisID: 'y',
+                            pointRadius: 0
                         },
                         {
                             label: 'Humidity (%)',
@@ -78,7 +99,8 @@ document.addEventListener('DOMContentLoaded', function () {
                             backgroundColor: '#42a5f5',
                             fill: false,
                             tension: 0.2,
-                            yAxisID: 'y1'
+                            yAxisID: 'y1',
+                            pointRadius: 0
                         }
                     ]
                 },

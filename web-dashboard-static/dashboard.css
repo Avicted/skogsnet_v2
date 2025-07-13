@@ -25,14 +25,30 @@ body {
     padding: 0;
 }
 
+.top-bar {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    margin-top: 16px;
+    margin-left: 100px;
+}
+
 h2 {
+    margin: 0;
     color: #ffb74d;
-    margin: 32px 0 0 0;
     font-weight: 400;
 }
 
+#current-values {
+    font-size: 1.15em;
+    margin-left: 32px;
+}
+
 .controls {
-    margin: 24px 0 12px 0;
+    margin: 0;
+    margin-left: 32px;
 }
 
 label,

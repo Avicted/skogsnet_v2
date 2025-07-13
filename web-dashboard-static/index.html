@@ -11,21 +11,27 @@
 
 <body>
     <div class="container">
-        <h2>🌲 Skogsnet Dashboard</h2>
-        <div class="controls">
-            <label for="range">Show:</label>
-            <select id="range">
-                <option value="">All</option>
-                <option value="1h">1h</option>
-                <option value="today">Today</option>
-                <option value="week">This week</option>
-                <option value="month">This month</option>
-                <option value="year">This year</option>
-            </select>
-            <label for="liveToggle" style="margin-left:20px;">
-                <input type="checkbox" id="liveToggle" checked>
-                Live updates
-            </label>
+        <div class="top-bar">
+            <h2>🌲 Skogsnet Dashboard</h2>
+            <div id="current-values">
+                <span id="current-temp">Temperature: -- °C</span> &nbsp;|&nbsp;
+                <span id="current-hum">Humidity: -- %</span>
+            </div>
+            <div class="controls">
+                <label for="range">Show:</label>
+                <select id="range">
+                    <option value="">All</option>
+                    <option value="1h">1h</option>
+                    <option value="today">Today</option>
+                    <option value="week">This week</option>
+                    <option value="month">This month</option>
+                    <option value="year">This year</option>
+                </select>
+                <label for="liveToggle" style="margin-left:20px;">
+                    <input type="checkbox" id="liveToggle" checked>
+                    Live updates
+                </label>
+            </div>
         </div>
         <canvas id="chart"></canvas>
     </div>
