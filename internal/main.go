@@ -28,7 +28,7 @@ type Measurement struct {
 var (
 	portName   = flag.String("port", "/dev/ttyACM0", "Serial port name")
 	baudRate   = flag.Int("baud", 9600, "Serial baud rate")
-	dbFileName = "measurements.db"
+	dbFileName = flag.String("db", "measurements.db", "SQLite database filename")
 	exportCSV  = flag.String("export-csv", "", "Export measurements to CSV file and exit")
 )
 
@@ -162,7 +162,7 @@ func main() {
 	flag.Parse()
 
 	if *exportCSV != "" {
-		db, err := openDatabase(dbFileName)
+		db, err := openDatabase(*dbFileName)
 		if err != nil {
 			log.Fatal(err)
 			return
@@ -194,7 +194,7 @@ func main() {
 	}
 	defer serialPort.Close()
 
-	db, err := openDatabase(dbFileName)
+	db, err := openDatabase(*dbFileName)
 	if err != nil {
 		log.Fatal(err)
 		return
