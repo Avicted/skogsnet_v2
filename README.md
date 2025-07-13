@@ -1,15 +1,18 @@
 # Skogsnet v2
 
-Skogsnet v2 is a Go application for reading temperature and humidity measurements from a serial device, saving them to a SQLite database, and printing them to the console in a human-readable format.
+Skogsnet v2 is a Go application for reading temperature and humidity measurements from a serial device, saving them to a SQLite database. It features a web dashboard for visualizing the data, configurable logging, and the ability to export measurements to CSV.
+
 
 ## Features
 
-- Reads JSON-formatted measurements from a serial port (default: `/dev/ttyACM0`)
-- Saves measurements to a SQLite database (`measurements.db`)
-- Prints each measurement to the console with a readable timestamp
-- Handles graceful shutdown on Ctrl+C or SIGTERM
-- Exports measurements to a CSV file if specified
-- Logs to a file if specified
+- **Serial Data Acquisition:** Reads JSON-formatted measurements from a serial port (default: `/dev/ttyACM0`)
+- **Database Storage:** Saves measurements to a SQLite database (`measurements.db`)
+- **Console Output:** Prints each measurement in a readable, color-formatted style
+- **Graceful Shutdown:** Handles Ctrl+C or SIGTERM cleanly
+- **CSV Export:** Export all measurements to a CSV file with a single flag
+- **Configurable Logging:** Log to a file with log levels (info, warn, error)
+- **Web Dashboard:** Visualize measurements interactively with time range selection, dual axes, dark mode, and live updates
+
 
 ## Requirements
 
@@ -36,6 +39,8 @@ The following CLI flags are available:
 Usage of ./build/skogsnet_v2:
   -baud int
     	Serial baud rate (default 9600)
+  -dashboard
+    	Serve web dashboard at http://localhost:8080
   -db string
     	SQLite database filename (default "measurements.db")
   -export-csv string
@@ -45,7 +50,6 @@ Usage of ./build/skogsnet_v2:
   -port string
     	Serial port name (default "/dev/ttyACM0")
 ```
-
 
 
 ## Run
@@ -64,13 +68,19 @@ Usage of ./build/skogsnet_v2:
     Humidity:    74.44 %
   ```
 
+## Web Dashboard
 
-## Export to CSV
-You can export measurements to a CSV file by using the `--export-csv` flag:
+- **Features:**  
+  - Interactive chart with dual axes (°C and %)
+  - Time range selection: 1h, today, week, month, year, all
+  - Live data updates (toggleable)
+  - Responsive dark mode design
+  - 24h time labels
 
-```sh
-./build/skogsnet_v2 --export-csv=measurements.csv
-```
+- **Access:**  
+  Start with `-dashboard` and open [http://localhost:8080](http://localhost:8080)
+
+![web-dashboard](web-dashboard-static/web-dashboard-screenshot.png)
 
 
 ## License

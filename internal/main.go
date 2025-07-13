@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,10 +16,11 @@ import (
 )
 
 var (
-	portName   = flag.String("port", "/dev/ttyACM0", "Serial port name")
-	baudRate   = flag.Int("baud", 9600, "Serial baud rate")
-	dbFileName = flag.String("db", "measurements.db", "SQLite database filename")
-	exportCSV  = flag.String("export-csv", "", "Export measurements to CSV file and exit")
+	portName       = flag.String("port", "/dev/ttyACM0", "Serial port name")
+	baudRate       = flag.Int("baud", 9600, "Serial baud rate")
+	dbFileName     = flag.String("db", "measurements.db", "SQLite database filename")
+	exportCSV      = flag.String("export-csv", "", "Export measurements to CSV file and exit")
+	serveDashboard = flag.Bool("dashboard", false, "Serve web dashboard at http://localhost:8080")
 )
 
 func main() {
@@ -64,6 +66,19 @@ func main() {
 		return
 	}
 	defer db.Close()
+
+	if *serveDashboard {
+		serveAPI(db)
+		http.Handle("/", http.FileServer(http.Dir("web-dashboard-static")))
+		go func() {
+			addr := "http://localhost:8080"
+			logInfo("Web dashboard served at %s", addr)
+			fmt.Printf("Web dashboard served at %s\n", addr)
+			if err := http.ListenAndServe(":8080", nil); err != nil {
+				logError("Dashboard server error: %v", err)
+			}
+		}()
+	}
 
 	scanner := bufio.NewScanner(serialPort)
 	for {

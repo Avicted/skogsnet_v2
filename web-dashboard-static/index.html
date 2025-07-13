@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Skogsnet Dashboard</title>
+    <link rel="icon" type="image/x-icon" href="favicon.png">
+    <script src="chart.js"></script>
+    <script src="dashboard.js"></script>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+
+<body>
+    <div class="container">
+        <h2>🌲 Skogsnet Dashboard</h2>
+        <div class="controls">
+            <label for="range">Show:</label>
+            <select id="range">
+                <option value="">All</option>
+                <option value="1h">1h</option>
+                <option value="today">Today</option>
+                <option value="week">This week</option>
+                <option value="month">This month</option>
+                <option value="year">This year</option>
+            </select>
+            <label for="liveToggle" style="margin-left:20px;">
+                <input type="checkbox" id="liveToggle" checked>
+                Live updates
+            </label>
+        </div>
+        <canvas id="chart"></canvas>
+    </div>
+</body>
+
+</html>
