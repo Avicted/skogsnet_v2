@@ -39,6 +39,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const temp = movingAverage(data.map(m => m.TemperatureCelsius), 5);
         const hum = movingAverage(data.map(m => m.HumidityPercentage), 5);
 
+        // Fix for blurry tooltips/lines on high-DPI screens
+        const canvas = document.getElementById('chart');
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = canvas.offsetWidth * dpr;
+        canvas.height = canvas.offsetHeight * dpr;
+        canvas.getContext('2d').setTransform(1, 0, 0, 1, 0, 0);
+        canvas.getContext('2d').scale(dpr, dpr);
+
         const ctx = document.getElementById('chart').getContext('2d');
         const chartOptions = {
             responsive: true,
@@ -48,7 +56,23 @@ document.addEventListener('DOMContentLoaded', function () {
                 legend: {
                     labels: { color: "#e0e0e0", font: { size: 16 } }
                 },
-                title: { display: false }
+                title: { display: false },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: '#23272f',
+                    borderColor: '#ffb74d',
+                    borderWidth: 2,
+                    titleColor: '#ffb74d',
+                    bodyColor: '#e0e0e0',
+                    cornerRadius: 8,
+                    padding: 12,
+                    titleFont: { size: 16, weight: 'bold' },
+                    bodyFont: { size: 15 },
+                    displayColors: false, // Hide small color boxes
+                    caretSize: 8,
+                    boxPadding: 6,
+                }
             },
             scales: {
                 x: { ticks: { color: "#e0e0e0" }, grid: { color: "#333" } },
@@ -77,6 +101,34 @@ document.addEventListener('DOMContentLoaded', function () {
             chartInstance.data.datasets[1].data = hum;
             chartInstance.update();
         } else {
+            const crosshairPlugin = {
+                id: 'crosshair',
+                afterDatasetsDraw(chart) {
+                    const tooltip = chart.tooltip;
+                    if (
+                        tooltip &&
+                        tooltip.opacity !== 0 &&
+                        tooltip.dataPoints &&
+                        tooltip.dataPoints.length
+                    ) {
+                        const ctx = chart.ctx;
+                        const x = tooltip.dataPoints[0].element.x;
+
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.moveTo(x, chart.chartArea.top);
+                        ctx.lineTo(x, chart.chartArea.bottom);
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = '#fafafa';
+                        ctx.setLineDash([4, 4]);
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                }
+            };
+
+
+
             chartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -104,7 +156,15 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     ]
                 },
-                options: chartOptions
+                options: chartOptions,
+                plugins: [crosshairPlugin]
+            });
+
+
+            // Remove crosshair when mouse leaves
+            canvas.addEventListener('mouseleave', function () {
+                chartInstance._active = [];
+                chartInstance.update();
             });
         }
     }
