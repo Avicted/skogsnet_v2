@@ -120,8 +120,18 @@ func insertMeasurement(db *sql.DB, m Measurement) error {
 
 func printToConsole(measurement Measurement) {
 	t := time.UnixMilli(measurement.UnixTimestamp)
-	fmt.Printf("Measurement at %s: Temperature = %.2f °C, Humidity = %.2f%%\n",
-		t.Format("2006-01-02 15:04:05"), measurement.TemperatureCelsius, measurement.HumidityPercentage)
+
+	// ANSI color codes
+	const (
+		green  = "\033[32m"
+		cyan   = "\033[36m"
+		yellow = "\033[33m"
+		reset  = "\033[0m"
+	)
+
+	fmt.Printf("%sMeasurement at %s%s\n", cyan, t.Format("2006-01-02 15:04:05"), reset)
+	fmt.Printf("    %sTemperature:%s %s%.2f °C%s\n", green, reset, reset, measurement.TemperatureCelsius, reset)
+	fmt.Printf("    %sHumidity:   %s %s%.2f %%%s\n", green, reset, reset, measurement.HumidityPercentage, reset)
 }
 
 func main() {
