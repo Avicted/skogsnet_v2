@@ -14,8 +14,7 @@ Skogsnet v2 is a Go application for reading temperature and humidity measurement
 ## Requirements
 
 - Go 1.18 or newer
-- [go.bug.st/serial](https://github.com/bugst/go-serial)
-- [github.com/mattn/go-sqlite3](https://pkg.go.dev/github.com/mattn/go-sqlite3)
+
 
 ## Build
 

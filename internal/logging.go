@@ -26,26 +26,26 @@ func setupLogging() {
 	}
 }
 
-func logInfo(format string, v ...interface{}) {
+func logInfo(format string, v ...any) {
 	log.Printf("[INFO] "+format, v...)
 }
 
-func logWarn(format string, v ...interface{}) {
+func logWarn(format string, v ...any) {
 	log.Printf("[WARN] "+format, v...)
 }
 
-func logError(format string, v ...interface{}) {
+func logError(format string, v ...any) {
 	log.Printf("[ERROR] "+format, v...)
 }
 
-func throttledLogWarn(last *time.Time, format string, v ...interface{}) {
+func throttledLogWarn(last *time.Time, format string, v ...any) {
 	if time.Since(*last) > throttleInterval {
 		logWarn(format, v...)
 		*last = time.Now()
 	}
 }
 
-func throttledLogError(last *time.Time, format string, v ...interface{}) {
+func throttledLogError(last *time.Time, format string, v ...any) {
 	if time.Since(*last) > throttleInterval {
 		logError(format, v...)
 		*last = time.Now()
