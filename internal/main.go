@@ -60,7 +60,7 @@ func read_from_serial(scanner *bufio.Scanner) (string, error) {
 	return "", nil
 }
 
-func deserialize_data(data string) (Measurement, error) {
+func deserializeData(data string) (Measurement, error) {
 	var measurement Measurement
 	type raw struct {
 		TemperatureCelsius float64 `json:"temperature_celcius"`
@@ -76,7 +76,7 @@ func deserialize_data(data string) (Measurement, error) {
 	return measurement, nil
 }
 
-func open_measurement_file(fileName string) (*os.File, error) {
+func openMeasurementFile(fileName string) (*os.File, error) {
 	_, err := os.Stat(fileName)
 	if os.IsNotExist(err) {
 		file, err := os.Create(fileName)
@@ -99,7 +99,7 @@ func open_measurement_file(fileName string) (*os.File, error) {
 	return file, nil
 }
 
-func write_to_file(file *os.File, measurement Measurement) error {
+func writeToFile(file *os.File, measurement Measurement) error {
 	line := fmt.Sprintf("%d\t%.6f\t%.6f\n", measurement.UnixTimestamp, measurement.TemperatureCelsius, measurement.HumidityPercentage)
 	if _, err := file.WriteString(line); err != nil {
 		return fmt.Errorf("failed to write measurement to file: %w", err)
@@ -107,7 +107,7 @@ func write_to_file(file *os.File, measurement Measurement) error {
 	return nil
 }
 
-func print_to_console(measurement Measurement) {
+func printToConsole(measurement Measurement) {
 	t := time.UnixMilli(measurement.UnixTimestamp)
 	fmt.Printf("Measurement at %s: Temperature = %.2f °C, Humidity = %.2f%%\n",
 		t.Format("2006-01-02 15:04:05"), measurement.TemperatureCelsius, measurement.HumidityPercentage)
@@ -133,7 +133,7 @@ func main() {
 	}
 	defer serialPort.Close()
 
-	file, err := open_measurement_file(measurementFileName)
+	file, err := openMeasurementFile(measurementFileName)
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -157,17 +157,17 @@ func main() {
 				continue
 			}
 
-			measurement, err := deserialize_data(line)
+			measurement, err := deserializeData(line)
 			if err != nil {
 				log.Println(err)
 				continue
 			}
 
-			if err := write_to_file(file, measurement); err != nil {
+			if err := writeToFile(file, measurement); err != nil {
 				log.Printf("Error writing to file: %v", err)
 				continue
 			}
-			print_to_console(measurement)
+			printToConsole(measurement)
 		}
 	}
 }
