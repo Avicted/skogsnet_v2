@@ -31,22 +31,32 @@ func TestDeserializeData_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestWriteToFile(t *testing.T) {
-	tmpFile := "test_measurements.dat"
-	defer os.Remove(tmpFile)
+func TestInsertMeasurement(t *testing.T) {
+	tmpDB := "test_measurements.db"
+	defer os.Remove(tmpDB)
 
-	file, err := openMeasurementFile(tmpFile)
+	db, err := openDatabase(tmpDB)
 	if err != nil {
-		t.Fatalf("Failed to open measurement file: %v", err)
+		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer file.Close()
+	defer db.Close()
 
 	m := Measurement{
 		UnixTimestamp:      time.Now().UnixMilli(),
 		TemperatureCelsius: 20.0,
 		HumidityPercentage: 50.0,
 	}
-	if err := writeToFile(file, m); err != nil {
-		t.Errorf("Failed to write to file: %v", err)
+	if err := insertMeasurement(db, m); err != nil {
+		t.Errorf("Failed to insert measurement: %v", err)
+	}
+
+	// Verify that the measurement was inserted
+	var count int
+	row := db.QueryRow("SELECT COUNT(*) FROM measurements WHERE timestamp = ?", m.UnixTimestamp)
+	if err := row.Scan(&count); err != nil {
+		t.Errorf("Failed to query measurement: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("Expected 1 measurement in DB, got %d", count)
 	}
 }

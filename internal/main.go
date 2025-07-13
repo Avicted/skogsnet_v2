@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
 	"go.bug.st/serial"
 	"go.bug.st/serial/enumerator"
 )
@@ -23,7 +25,7 @@ type Measurement struct {
 
 const portName = "/dev/ttyACM0"
 const baudRate = 9600
-const measurementFileName = "measurements.dat"
+const dbFileName = "measurements.db"
 
 func initialize_serial_connection() (*enumerator.PortDetails, error) {
 	fmt.Println("Initializing serial connection...")
@@ -76,35 +78,36 @@ func deserializeData(data string) (Measurement, error) {
 	return measurement, nil
 }
 
-func openMeasurementFile(fileName string) (*os.File, error) {
-	_, err := os.Stat(fileName)
-	if os.IsNotExist(err) {
-		file, err := os.Create(fileName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create file: %w", err)
-		}
-		header := "UnixTimestampInMilliseconds\tTemperatureCelcius\tHumidity\n"
-		if _, err := file.WriteString(header); err != nil {
-			file.Close()
-			return nil, fmt.Errorf("failed to write header to file: %w", err)
-		}
-		return file, nil
-	}
-
-	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY, 0644)
+func openDatabase(dbPath string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file for appending: %w", err)
+		return nil, err
 	}
 
-	return file, nil
+	createTable := `
+    CREATE TABLE IF NOT EXISTS measurements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER,
+        temperature REAL,
+        humidity REAL
+    );`
+
+	_, err = db.Exec(createTable)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	return db, nil
 }
 
-func writeToFile(file *os.File, measurement Measurement) error {
-	line := fmt.Sprintf("%d\t%.6f\t%.6f\n", measurement.UnixTimestamp, measurement.TemperatureCelsius, measurement.HumidityPercentage)
-	if _, err := file.WriteString(line); err != nil {
-		return fmt.Errorf("failed to write measurement to file: %w", err)
-	}
-	return nil
+func insertMeasurement(db *sql.DB, m Measurement) error {
+	_, err := db.Exec(
+		"INSERT INTO measurements (timestamp, temperature, humidity) VALUES (?, ?, ?)",
+		m.UnixTimestamp, m.TemperatureCelsius, m.HumidityPercentage,
+	)
+
+	return err
 }
 
 func printToConsole(measurement Measurement) {
@@ -133,12 +136,12 @@ func main() {
 	}
 	defer serialPort.Close()
 
-	file, err := openMeasurementFile(measurementFileName)
+	db, err := openDatabase(dbFileName)
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
-	defer file.Close()
+	defer db.Close()
 
 	scanner := bufio.NewScanner(serialPort)
 	for {
@@ -163,8 +166,8 @@ func main() {
 				continue
 			}
 
-			if err := writeToFile(file, measurement); err != nil {
-				log.Printf("Error writing to file: %v", err)
+			if err := insertMeasurement(db, measurement); err != nil {
+				log.Printf("Error writing to database: %v", err)
 				continue
 			}
 			printToConsole(measurement)
