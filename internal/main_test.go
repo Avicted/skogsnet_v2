@@ -80,6 +80,17 @@ func TestDeserializeData_MissingFields(t *testing.T) {
 	}
 }
 
+func TestDeserializeData_ExtraFields(t *testing.T) {
+	jsonStr := `{"temperature_celcius":25.0,"humidity":60.0,"extra":123}`
+	m, err := deserializeData(jsonStr)
+	if err != nil {
+		t.Fatalf("Expected no error for extra fields, got %v", err)
+	}
+	if m.TemperatureCelsius != 25.0 || m.HumidityPercentage != 60.0 {
+		t.Errorf("Unexpected values: %v", m)
+	}
+}
+
 func TestEndToEndMeasurementFlow(t *testing.T) {
 	tmpDB := "test_measurements_e2e.db"
 	defer os.Remove(tmpDB)
@@ -150,5 +161,30 @@ func TestExportToCSV(t *testing.T) {
 	}
 	if fileInfo.Size() == 0 {
 		t.Error("CSV file is empty after export")
+	}
+}
+
+func TestExportToCSV_EmptyDB(t *testing.T) {
+	tmpDB := "test_empty_export.db"
+	defer os.Remove(tmpDB)
+
+	db, err := openDatabase(tmpDB)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	csvFile := "test_empty_export.csv"
+	if err := exportToCSV(db, csvFile); err != nil {
+		t.Fatalf("Failed to export to CSV: %v", err)
+	}
+	defer os.Remove(csvFile)
+
+	data, err := os.ReadFile(csvFile)
+	if err != nil {
+		t.Fatalf("Failed to read CSV file: %v", err)
+	}
+	if string(data) != "timestamp,temperature,humidity\n" {
+		t.Errorf("CSV file should only contain header, got: %q", string(data))
 	}
 }

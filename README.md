@@ -9,6 +9,7 @@ Skogsnet v2 is a Go application for reading temperature and humidity measurement
 - Prints each measurement to the console with a readable timestamp
 - Handles graceful shutdown on Ctrl+C or SIGTERM
 - Exports measurements to a CSV file if specified
+- Logs to a file if specified
 
 ## Requirements
 
@@ -40,6 +41,8 @@ Usage of ./build/skogsnet_v2:
     	SQLite database filename (default "measurements.db")
   -export-csv string
     	Export measurements to CSV file and exit
+  -log-file string
+    	Log output to file (optional)
   -port string
     	Serial port name (default "/dev/ttyACM0")
 ```

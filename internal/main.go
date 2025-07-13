@@ -30,6 +30,7 @@ var (
 	baudRate   = flag.Int("baud", 9600, "Serial baud rate")
 	dbFileName = flag.String("db", "measurements.db", "SQLite database filename")
 	exportCSV  = flag.String("export-csv", "", "Export measurements to CSV file and exit")
+	logFile    = flag.String("log-file", "", "Log output to file (optional)")
 )
 
 func initialize_serial_connection() (*enumerator.PortDetails, error) {
@@ -54,7 +55,7 @@ func initialize_serial_connection() (*enumerator.PortDetails, error) {
 			return port, nil
 		}
 	}
-	return nil, fmt.Errorf("no suitable serial port found")
+	return nil, fmt.Errorf("specified port %s not found in available ports", *portName)
 }
 
 func read_from_serial(scanner *bufio.Scanner) (string, error) {
@@ -158,24 +159,69 @@ func printToConsole(measurement Measurement) {
 	fmt.Printf("    %sHumidity:   %s %s%.2f %%%s\n", green, reset, reset, measurement.HumidityPercentage, reset)
 }
 
+func setupLogging() {
+	if *logFile != "" {
+		f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			log.Fatalf("Failed to open log file: %v", err)
+		}
+		log.SetOutput(f)
+	}
+}
+
+func logInfo(format string, v ...interface{}) {
+	log.Printf("[INFO] "+format, v...)
+}
+
+func logWarn(format string, v ...interface{}) {
+	log.Printf("[WARN] "+format, v...)
+}
+
+func logError(format string, v ...interface{}) {
+	log.Printf("[ERROR] "+format, v...)
+}
+
+var (
+	lastWarn           time.Time
+	lastTimeoutWarn    time.Time
+	lastDeserializeErr time.Time
+	lastInsertErr      time.Time
+	throttleInterval   = 5 * time.Second
+)
+
+func throttledLogWarn(last *time.Time, format string, v ...interface{}) {
+	if time.Since(*last) > throttleInterval {
+		logWarn(format, v...)
+		*last = time.Now()
+	}
+}
+
+func throttledLogError(last *time.Time, format string, v ...interface{}) {
+	if time.Since(*last) > throttleInterval {
+		logError(format, v...)
+		*last = time.Now()
+	}
+}
+
 func main() {
 	flag.Parse()
+	setupLogging()
 
 	if *exportCSV != "" {
 		db, err := openDatabase(*dbFileName)
 		if err != nil {
-			log.Fatal(err)
+			logError("Failed to open database: %v", err)
 			return
 		}
 		defer db.Close()
 		if err := exportToCSV(db, *exportCSV); err != nil {
-			log.Fatalf("Export to CSV failed: %v", err)
+			logError("Export to CSV failed: %v", err)
 		}
-		fmt.Printf("Exported measurements to %s\n", *exportCSV)
+		logInfo("Exported measurements to %s", *exportCSV)
 		return
 	}
 
-	fmt.Println("Skogsnet v2")
+	logInfo("Skogsnet v2 started")
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -210,24 +256,28 @@ func main() {
 		default:
 			line, err := read_from_serial(scanner)
 			if err != nil {
-				log.Println(err)
-				continue
+				if err.Error() == "timeout" {
+					throttledLogWarn(&lastTimeoutWarn, "Serial read timeout. Retrying...")
+					continue
+				}
 			}
 			if line == "" {
-				log.Println("No data read from serial port. Retrying...")
+				throttledLogWarn(&lastWarn, "No data read from serial port. Retrying...")
+				time.Sleep(500 * time.Millisecond)
 				continue
 			}
 
 			measurement, err := deserializeData(line)
 			if err != nil {
-				log.Println(err)
+				throttledLogError(&lastDeserializeErr, "Failed to deserialize data: %v", err)
 				continue
 			}
 
 			if err := insertMeasurement(db, measurement); err != nil {
-				log.Printf("Error writing to database: %v", err)
+				throttledLogError(&lastInsertErr, "Failed to insert measurement into database: %v", err)
 				continue
 			}
+
 			printToConsole(measurement)
 		}
 	}
