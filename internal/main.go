@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -23,9 +24,11 @@ type Measurement struct {
 	HumidityPercentage float64
 }
 
-const portName = "/dev/ttyACM0"
-const baudRate = 9600
-const dbFileName = "measurements.db"
+var (
+	portName   = flag.String("port", "/dev/ttyACM0", "Serial port name")
+	baudRate   = flag.Int("baud", 9600, "Serial baud rate")
+	dbFileName = "measurements.db"
+)
 
 func initialize_serial_connection() (*enumerator.PortDetails, error) {
 	fmt.Println("Initializing serial connection...")
@@ -44,7 +47,7 @@ func initialize_serial_connection() (*enumerator.PortDetails, error) {
 	}
 
 	for _, port := range ports {
-		if port.Name == portName {
+		if port.Name == *portName {
 			fmt.Printf("Using port: %s\n", port.Name)
 			return port, nil
 		}
@@ -117,6 +120,8 @@ func printToConsole(measurement Measurement) {
 }
 
 func main() {
+	flag.Parse()
+
 	fmt.Println("Skogsnet v2")
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -128,7 +133,7 @@ func main() {
 		return
 	}
 
-	mode := &serial.Mode{BaudRate: baudRate}
+	mode := &serial.Mode{BaudRate: *baudRate}
 	serialPort, err := serial.Open(portDetails.Name, mode)
 	if err != nil {
 		log.Fatal("Failed to open serial port:", err)

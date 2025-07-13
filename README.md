@@ -27,6 +27,19 @@ go build -o build/skogsnet_v2 ./internal
 go test ./internal
 ```
 
+## Configuration
+
+You can set the serial port and baud rate using command-line flags:
+
+```sh
+./build/skogsnet_v2 --port=/dev/ttyUSB0 --baud=115200
+```
+
+- `--port` sets the serial port device (default: `/dev/ttyACM0`)
+- `--baud` sets the baud rate (default: `9600`)
+
+The database filename is set by the `dbFileName` variable in the code
+
 ## Run
 
 ```sh
