@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -105,6 +106,10 @@ func openDatabase(dbPath string) (*sql.DB, error) {
 }
 
 func insertMeasurement(db *sql.DB, m Measurement) error {
+	if db == nil {
+		return errors.New("db is nil")
+	}
+
 	_, err := db.Exec(
 		"INSERT INTO measurements (timestamp, temperature, humidity) VALUES (?, ?, ?)",
 		m.UnixTimestamp, m.TemperatureCelsius, m.HumidityPercentage,

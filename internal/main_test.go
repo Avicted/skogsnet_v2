@@ -60,3 +60,52 @@ func TestInsertMeasurement(t *testing.T) {
 		t.Errorf("Expected 1 measurement in DB, got %d", count)
 	}
 }
+
+func TestInsertMeasurement_InvalidDB(t *testing.T) {
+	// Pass a nil db to insertMeasurement
+	err := insertMeasurement(nil, Measurement{})
+	if err == nil {
+		t.Error("Expected error when inserting with nil DB, got nil")
+	}
+}
+
+func TestDeserializeData_MissingFields(t *testing.T) {
+	jsonStr := `{"temperature_celcius":22.5}`
+	m, err := deserializeData(jsonStr)
+	if err != nil {
+		t.Fatalf("Expected no error for missing humidity, got %v", err)
+	}
+	if m.HumidityPercentage != 0 {
+		t.Errorf("Expected HumidityPercentage 0, got %v", m.HumidityPercentage)
+	}
+}
+
+func TestEndToEndMeasurementFlow(t *testing.T) {
+	tmpDB := "test_measurements_e2e.db"
+	defer os.Remove(tmpDB)
+
+	db, err := openDatabase(tmpDB)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	jsonStr := `{"temperature_celcius":21.1,"humidity":44.2}`
+	m, err := deserializeData(jsonStr)
+	if err != nil {
+		t.Fatalf("Failed to deserialize: %v", err)
+	}
+
+	if err := insertMeasurement(db, m); err != nil {
+		t.Fatalf("Failed to insert measurement: %v", err)
+	}
+
+	var temp, hum float64
+	row := db.QueryRow("SELECT temperature, humidity FROM measurements WHERE timestamp = ?", m.UnixTimestamp)
+	if err := row.Scan(&temp, &hum); err != nil {
+		t.Fatalf("Failed to query inserted measurement: %v", err)
+	}
+	if temp != 21.1 || hum != 44.2 {
+		t.Errorf("Expected (21.1, 44.2), got (%v, %v)", temp, hum)
+	}
+}
