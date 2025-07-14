@@ -1,6 +1,6 @@
 # Skogsnet v2
 
-Skogsnet v2 is a Go application for reading temperature and humidity measurements from a serial device, saving them to a SQLite database. It features a web dashboard for visualizing the data, configurable logging, and the ability to export measurements to CSV.
+Skogsnet v2 is a Go application for reading temperature and humidity measurements from a serial device, saving them to a SQLite database. It features a web dashboard for visualizing the data, configurable logging, and the ability to export measurements to CSV. It also integrates with the OpenMeteo API to fetch current weather data, displaying it alongside the measurements.
 
 
 ## Features
