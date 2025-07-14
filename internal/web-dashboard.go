@@ -34,18 +34,75 @@ func serveAPI(db *sql.DB) {
 			since = 0 // all data
 		}
 
-		rows, err := db.Query("SELECT timestamp, temperature, humidity FROM measurements WHERE timestamp >= ? ORDER BY timestamp", since)
+		const maxWeatherAgeMillis = int64(1 * 60 * 1000) // 1 minute
+
+		rows, err := db.Query(`
+			SELECT m.timestamp, m.temperature, m.humidity,
+				w.city, w.temp, w.humidity, w.wind_speed, w.wind_deg, w.clouds, w.weather_code, w.description,
+				w.timestamp as weather_ts
+			FROM measurements m
+			LEFT JOIN weather w ON w.timestamp = (
+				SELECT MAX(w2.timestamp) FROM weather w2
+				WHERE w2.timestamp <= m.timestamp AND w2.timestamp >= ?
+			)
+			WHERE m.timestamp >= ?
+			ORDER BY m.timestamp
+		`, since, since)
+
 		if err != nil {
 			http.Error(w, "DB error", 500)
 			return
 		}
 		defer rows.Close()
 
-		var data []Measurement
+		type Combined struct {
+			Timestamp       int64   `json:"timestamp"`
+			Temperature     float64 `json:"temperature"`
+			Humidity        float64 `json:"humidity"`
+			City            string  `json:"city"`
+			WeatherTemp     float64 `json:"weather_temp"`
+			WeatherHumidity int64   `json:"weather_humidity"`
+			WindSpeed       float64 `json:"wind_speed"`
+			WindDeg         int64   `json:"wind_deg"`
+			Clouds          int64   `json:"clouds"`
+			WeatherCode     int64   `json:"weather_code"`
+			Description     string  `json:"weather_description"`
+		}
+
+		var data []Combined
 		for rows.Next() {
-			var m Measurement
-			if err := rows.Scan(&m.UnixTimestamp, &m.TemperatureCelsius, &m.HumidityPercentage); err == nil {
-				data = append(data, m)
+			var c Combined
+			var city, description sql.NullString
+			var weatherTemp sql.NullFloat64
+			var weatherHumidity, windDeg, clouds, weatherCode, weatherTs sql.NullInt64
+			var windSpeed sql.NullFloat64
+
+			if err := rows.Scan(
+				&c.Timestamp, &c.Temperature, &c.Humidity,
+				&city, &weatherTemp, &weatherHumidity, &windSpeed, &windDeg, &clouds, &weatherCode, &description,
+				&weatherTs,
+			); err == nil {
+				// Only use weather data if it's not too old
+				if weatherTs.Valid && (c.Timestamp-weatherTs.Int64) <= maxWeatherAgeMillis && (c.Timestamp-weatherTs.Int64) >= 0 {
+					c.City = city.String
+					c.WeatherTemp = weatherTemp.Float64
+					c.WeatherHumidity = weatherHumidity.Int64
+					c.WindSpeed = windSpeed.Float64
+					c.WindDeg = windDeg.Int64
+					c.Clouds = clouds.Int64
+					c.WeatherCode = weatherCode.Int64
+					c.Description = description.String
+				} else {
+					c.City = ""
+					c.WeatherTemp = 0
+					c.WeatherHumidity = 0
+					c.WindSpeed = 0
+					c.WindDeg = 0
+					c.Clouds = 0
+					c.WeatherCode = 0
+					c.Description = ""
+				}
+				data = append(data, c)
 			}
 		}
 

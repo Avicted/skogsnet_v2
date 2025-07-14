@@ -29,7 +29,7 @@ func deserializeData(data string) (Measurement, error) {
 	return measurement, nil
 }
 
-func printToConsole(measurement Measurement) {
+func printToConsole(measurement Measurement, weather *Weather) {
 	t := time.UnixMilli(measurement.UnixTimestamp)
 
 	const (
@@ -40,6 +40,16 @@ func printToConsole(measurement Measurement) {
 	)
 
 	fmt.Printf("%sMeasurement at %s%s\n", cyan, t.Format("2006-01-02 15:04:05"), reset)
-	fmt.Printf("    %sTemperature:%s %s%.2f °C%s\n", green, reset, reset, measurement.TemperatureCelsius, reset)
-	fmt.Printf("    %sHumidity:   %s %s%.2f %%%s\n", green, reset, reset, measurement.HumidityPercentage, reset)
+	fmt.Printf("    %sTemperature:        %s %s%.2f °C%s\n", green, reset, reset, measurement.TemperatureCelsius, reset)
+	fmt.Printf("    %sHumidity:           %s %s%.2f %%%s\n", green, reset, reset, measurement.HumidityPercentage, reset)
+
+	if weather != nil && len(weather.Weather) > 0 {
+		fmt.Printf("\n")
+		fmt.Printf("    %sWeather:            %s %s\n", green, reset, weather.Weather[0].Description)
+		fmt.Printf("    %sOutside Temperature:%s %.2f °C\n", green, reset, weather.Main.Temp)
+		fmt.Printf("    %sOutside Humidity:   %s %d%%\n", green, reset, weather.Main.Humidity)
+		fmt.Printf("    %sWind Speed:         %s %.2f m/s\n", green, reset, weather.Wind.Speed)
+		fmt.Printf("    %sWind Direction:     %s %d°\n", green, reset, weather.Wind.Deg)
+		fmt.Printf("    %sCloud Cover:        %s %d%%\n", green, reset, weather.Clouds.All)
+	}
 }

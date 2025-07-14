@@ -5,7 +5,8 @@ body {
     padding: 0;
     background: #181a20;
     color: #e0e0e0;
-    font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+    font-family: 'Fira Mono', 'Menlo', 'Consolas', 'Liberation Mono', 'monospace';
+    font-size: 0.97em;
 }
 
 body {
@@ -43,7 +44,9 @@ h2 {
 
 #current-values {
     font-size: 1.15em;
-    margin-left: 32px;
+    width: 100%;
+    margin-left: 110px;
+    margin-bottom: 16px;
 }
 
 .controls {
@@ -68,9 +71,9 @@ select {
 #chart {
     flex: 1 1 auto;
     width: 98vw !important;
-    height: 90vh !important;
+    height: calc(100vh - 140px) !important;
     max-width: 100vw;
-    max-height: 90vh;
+    max-height: calc(100vh - 140px);
     background: #181a20;
     border-radius: 8px;
     margin: 0 auto 24px auto;
@@ -88,6 +91,7 @@ select {
     }
 
     #chart {
-        height: 50vh !important;
+        height: calc(100vh - 110px) !important;
+        max-height: calc(100vh - 110px);
     }
 }

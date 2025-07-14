@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -13,6 +14,7 @@ var (
 	lastTimeoutWarn    time.Time
 	lastDeserializeErr time.Time
 	lastInsertErr      time.Time
+	lastWeatherErr     time.Time
 	throttleInterval   = 5 * time.Second
 )
 
@@ -22,7 +24,8 @@ func setupLogging() {
 		if err != nil {
 			log.Fatalf("Failed to open log file: %v", err)
 		}
-		log.SetOutput(f)
+		multiWriter := io.MultiWriter(f, os.Stdout)
+		log.SetOutput(multiWriter)
 	}
 }
 

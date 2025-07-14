@@ -12,7 +12,7 @@ Skogsnet v2 is a Go application for reading temperature and humidity measurement
 - **CSV Export:** Export all measurements to a CSV file with a single flag
 - **Configurable Logging:** Log to a file with log levels (info, warn, error)
 - **Web Dashboard:** Visualize measurements interactively with time range selection, dual axes, dark mode, and live updates
-
+- **Weather Data Integration:** Fetches current weather data from OpenMeteo API and displays it alongside measurements
 
 ## Requirements
 
@@ -39,6 +39,8 @@ The following CLI flags are available:
 Usage of ./build/skogsnet_v2:
   -baud int
     	Serial baud rate (default 9600)
+  -city string
+    	City name for weather data
   -dashboard
     	Serve web dashboard at http://localhost:8080
   -db string
@@ -49,13 +51,19 @@ Usage of ./build/skogsnet_v2:
     	Log output to file (optional)
   -port string
     	Serial port name (default "/dev/ttyACM0")
+  -weather
+    	Enable periodic weather data fetching
 ```
 
 
 ## Run
 
 ```sh
+# Only sensor data acquisition and storage
 ./build/skogsnet_v2
+
+# With logging, weather data, and dashboard enabled
+./build/skogsnet_v2 -log-file=skogsnet.log -dashboard -weather -city=Helsinki
 ```
 
 ## Output
@@ -63,9 +71,16 @@ Usage of ./build/skogsnet_v2:
 - Measurements are stored in a SQLite database file named `measurements.db`.
 - Console output example:
   ```
-  Measurement at 2025-07-13 18:23:12
-    Temperature: 23.78 °C
-    Humidity:    74.44 %
+  Measurement at 2025-07-14 13:07:15
+    Temperature:         23.91 °C
+    Humidity:            77.75 %
+
+    Weather:             Mainly clear
+    Outside Temperature: 28.50 °C
+    Outside Humidity:    49%
+    Wind Speed:          18.40 m/s
+    Wind Direction:      24°
+    Cloud Cover:         0%
   ```
 
 ## Web Dashboard

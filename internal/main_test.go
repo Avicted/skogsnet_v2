@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -46,7 +48,7 @@ func TestInsertMeasurement(t *testing.T) {
 		TemperatureCelsius: 20.0,
 		HumidityPercentage: 50.0,
 	}
-	if err := insertMeasurement(db, m); err != nil {
+	if err := insertMeasurement(db, m, m.UnixTimestamp); err != nil {
 		t.Errorf("Failed to insert measurement: %v", err)
 	}
 
@@ -63,7 +65,7 @@ func TestInsertMeasurement(t *testing.T) {
 
 func TestInsertMeasurement_InvalidDB(t *testing.T) {
 	// Pass a nil db to insertMeasurement
-	err := insertMeasurement(nil, Measurement{})
+	err := insertMeasurement(nil, Measurement{}, time.Now().UnixMilli())
 	if err == nil {
 		t.Error("Expected error when inserting with nil DB, got nil")
 	}
@@ -107,7 +109,7 @@ func TestEndToEndMeasurementFlow(t *testing.T) {
 		t.Fatalf("Failed to deserialize: %v", err)
 	}
 
-	if err := insertMeasurement(db, m); err != nil {
+	if err := insertMeasurement(db, m, m.UnixTimestamp); err != nil {
 		t.Fatalf("Failed to insert measurement: %v", err)
 	}
 
@@ -131,22 +133,55 @@ func TestExportToCSV(t *testing.T) {
 	}
 	defer db.Close()
 
+	timestamp := time.Now().UnixMilli()
+
+	// Insert some test data
 	m1 := Measurement{
 		UnixTimestamp:      time.Now().UnixMilli(),
-		TemperatureCelsius: 20.0,
-		HumidityPercentage: 50.0,
-	}
-	m2 := Measurement{
-		UnixTimestamp:      time.Now().UnixMilli() + 1000,
-		TemperatureCelsius: 22.0,
-		HumidityPercentage: 55.0,
+		TemperatureCelsius: 22.5,
+		HumidityPercentage: 55.1,
 	}
 
-	if err := insertMeasurement(db, m1); err != nil {
-		t.Errorf("Failed to insert first measurement: %v", err)
+	weather := Weather{
+		Name: "Vaasa",
+		Main: struct {
+			Temp     float64 `json:"temp"`
+			Humidity int     `json:"humidity"`
+		}{
+			Temp:     24.5,
+			Humidity: int(80.0),
+		},
+		Wind: struct {
+			Speed float64 `json:"speed"`
+			Deg   int     `json:"deg"`
+		}{
+			Speed: 5.0,
+			Deg:   180,
+		},
+		Clouds: struct {
+			All int `json:"all"`
+		}{
+			All: 75,
+		},
+		Weather: []struct {
+			ID          int    `json:"id"`
+			Main        string `json:"main"`
+			Description string `json:"description"`
+		}{
+			{
+				ID:          800,
+				Main:        "Clear",
+				Description: "clear sky",
+			},
+		},
 	}
-	if err := insertMeasurement(db, m2); err != nil {
-		t.Errorf("Failed to insert second measurement: %v", err)
+
+	if err := insertMeasurement(db, m1, timestamp); err != nil {
+		t.Fatalf("Failed to insert measurement: %v", err)
+	}
+
+	if err := insertWeather(db, weather, timestamp); err != nil {
+		t.Fatalf("Failed to insert weather: %v", err)
 	}
 
 	csvFile := "test_export.csv"
@@ -155,12 +190,40 @@ func TestExportToCSV(t *testing.T) {
 	}
 	defer os.Remove(csvFile)
 
-	fileInfo, err := os.Stat(csvFile)
+	data, err := os.ReadFile(csvFile)
 	if err != nil {
-		t.Fatalf("CSV file does not exist after export: %v", err)
+		t.Fatalf("Failed to read CSV file: %v", err)
 	}
-	if fileInfo.Size() == 0 {
-		t.Error("CSV file is empty after export")
+
+	expectedHeader := "timestamp,temperature,humidity,city,weather_temp,weather_humidity,wind_speed,wind_deg,clouds,weather_code,weather_description\n"
+	if string(data[:len(expectedHeader)]) != expectedHeader {
+		t.Errorf("CSV header mismatch:\nExpected: %q\nGot: %q", expectedHeader, string(data[:len(expectedHeader)]))
+	}
+
+	lines := string(data[len(expectedHeader):])
+	lines = strings.TrimSuffix(lines, "\n") // Remove trailing newline for comparison
+
+	if lines == "" {
+		t.Error("CSV file should contain data after header, but it's empty")
+	}
+
+	// Check if the data matches the inserted measurement and weather
+	expectedLine := fmt.Sprintf("%d,%.1f,%.1f,%s,%.1f,%d,%.1f,%d,%d,%d,%s",
+		timestamp,
+		m1.TemperatureCelsius,
+		m1.HumidityPercentage,
+		weather.Name,
+		weather.Main.Temp,
+		weather.Main.Humidity,
+		weather.Wind.Speed,
+		weather.Wind.Deg,
+		weather.Clouds.All,
+		weather.Weather[0].ID,
+		weather.Weather[0].Description,
+	)
+
+	if lines != expectedLine {
+		t.Errorf("CSV data mismatch:\nExpected: %q\nGot: %q", expectedLine, lines)
 	}
 }
 
@@ -184,7 +247,58 @@ func TestExportToCSV_EmptyDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read CSV file: %v", err)
 	}
-	if string(data) != "timestamp,temperature,humidity\n" {
+
+	expectedHeader := "timestamp,temperature,humidity,city,weather_temp,weather_humidity,wind_speed,wind_deg,clouds,weather_code,weather_description\n"
+	if string(data) != expectedHeader {
 		t.Errorf("CSV file should only contain header, got: %q", string(data))
+	}
+}
+
+func TestExportToCSV_NoWeatherData(t *testing.T) {
+	tmpDB := "test_no_weather_export.db"
+	defer os.Remove(tmpDB)
+
+	db, err := openDatabase(tmpDB)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	m := Measurement{
+		UnixTimestamp:      time.Now().UnixMilli(),
+		TemperatureCelsius: 22.0,
+		HumidityPercentage: 60.0,
+	}
+
+	if err := insertMeasurement(db, m, m.UnixTimestamp); err != nil {
+		t.Fatalf("Failed to insert measurement: %v", err)
+	}
+
+	csvFile := "test_no_weather_export.csv"
+	if err := exportToCSV(db, csvFile); err != nil {
+		t.Fatalf("Failed to export to CSV: %v", err)
+	}
+	defer os.Remove(csvFile)
+
+	data, err := os.ReadFile(csvFile)
+	if err != nil {
+		t.Fatalf("Failed to read CSV file: %v", err)
+	}
+
+	expectedHeader := "timestamp,temperature,humidity,city,weather_temp,weather_humidity,wind_speed,wind_deg,clouds,weather_code,weather_description\n"
+	if string(data[:len(expectedHeader)]) != expectedHeader {
+		t.Errorf("CSV header mismatch:\nExpected: %q\nGot: %q", expectedHeader, string(data[:len(expectedHeader)]))
+	}
+
+	lines := string(data[len(expectedHeader):])
+	lines = strings.TrimSuffix(lines, "\n") // Remove trailing newline for comparison
+
+	if lines == "" {
+		t.Error("CSV file should contain data after header, but it's empty")
+	}
+
+	expectedLine := fmt.Sprintf("%d,%.1f,%.1f,,0.0,0,0.0,0,0,0,", m.UnixTimestamp, m.TemperatureCelsius, m.HumidityPercentage)
+	if lines != expectedLine {
+		t.Errorf("CSV data mismatch:\nExpected: %q\nGot: %q", expectedLine, lines)
 	}
 }

@@ -13,10 +13,6 @@
     <div class="container">
         <div class="top-bar">
             <h2>🌲 Skogsnet Dashboard</h2>
-            <div id="current-values">
-                <span id="current-temp">Temperature: -- °C</span> &nbsp;|&nbsp;
-                <span id="current-hum">Humidity: -- %</span>
-            </div>
             <div class="controls">
                 <label for="range">Show:</label>
                 <select id="range">
@@ -35,6 +31,11 @@
                     Live updates
                 </label>
             </div>
+        </div>
+        <div id="current-values">
+            <span id="current-temp">Temperature: -- °C</span> &nbsp;|&nbsp;
+            <span id="current-hum">Humidity: -- %</span> &nbsp;|&nbsp;
+            <span id="outside-temp">Outside Temp: -- °C</span>
         </div>
         <canvas id="chart"></canvas>
     </div>

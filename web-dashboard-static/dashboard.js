@@ -28,16 +28,24 @@ document.addEventListener('DOMContentLoaded', function () {
         // Show current temp/humidity (latest data point)
         if (data.length > 0) {
             const latest = data[data.length - 1];
-            document.getElementById('current-temp').textContent = `Temperature: ${latest.TemperatureCelsius.toFixed(2)} °C`;
-            document.getElementById('current-hum').textContent = `Humidity: ${latest.HumidityPercentage.toFixed(2)} %`;
+            document.getElementById('current-temp').textContent = `Temp: ${latest.temperature.toFixed(2)} °C`;
+            document.getElementById('outside-temp').textContent = `Outside Temp: ${latest.weather_temp !== 0 ? latest.weather_temp.toFixed(2) : '--'} °C`;
+            document.getElementById('current-hum').textContent = `Humidity: ${latest.humidity.toFixed(2)} %`;
         } else {
-            document.getElementById('current-temp').textContent = "Temperature: -- °C";
+            document.getElementById('current-temp').textContent = "Temp: -- °C";
+            document.getElementById('outside-temp').textContent = "Outside Temp: -- °C";
             document.getElementById('current-hum').textContent = "Humidity: -- %";
         }
 
-        const labels = data.map(m => format24h(m.UnixTimestamp));
-        const temp = movingAverage(data.map(m => m.TemperatureCelsius), 5);
-        const hum = movingAverage(data.map(m => m.HumidityPercentage), 5);
+        const labels = data.map(m => format24h(m.timestamp));
+        const temp = movingAverage(data.map(m => m.temperature), 5);
+        const hum = movingAverage(data.map(m => m.humidity), 5);
+
+        // For weatherTemp, only plot non-zero values, and align labels
+        const weatherTemp = [];
+        for (let i = 0; i < data.length; i++) {
+            weatherTemp.push(data[i].weather_temp !== 0 ? data[i].weather_temp : null);
+        }
 
         // Fix for blurry tooltips/lines on high-DPI screens
         const canvas = document.getElementById('chart');
@@ -79,7 +87,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 y: {
                     type: 'linear',
                     position: 'left',
-                    title: { display: true, text: 'Temperature (°C)', color: '#ff7043' },
+                    title: { display: true, text: 'Temp (°C)', color: '#ff7043' },
                     ticks: {
                         color: "#ff7043",
                         stepSize: 0.1 // increments of 0.1°C
@@ -99,6 +107,7 @@ document.addEventListener('DOMContentLoaded', function () {
             chartInstance.data.labels = labels;
             chartInstance.data.datasets[0].data = temp;
             chartInstance.data.datasets[1].data = hum;
+            chartInstance.data.datasets[2].data = weatherTemp;
             chartInstance.update();
         } else {
             const crosshairPlugin = {
@@ -135,14 +144,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     labels,
                     datasets: [
                         {
-                            label: 'Temperature (°C)',
+                            label: 'Temp (°C)',
                             data: temp,
                             borderColor: '#ff7043',
                             backgroundColor: '#ff7043',
                             fill: false,
                             tension: 0.4,
                             yAxisID: 'y',
-                            pointRadius: 0
+                            pointRadius: 0,
+                            borderWidth: 1
                         },
                         {
                             label: 'Humidity (%)',
@@ -152,7 +162,19 @@ document.addEventListener('DOMContentLoaded', function () {
                             fill: false,
                             tension: 0.2,
                             yAxisID: 'y1',
-                            pointRadius: 0
+                            pointRadius: 0,
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Outside Temp (°C)',
+                            data: weatherTemp,
+                            borderColor: '#ffd600',
+                            backgroundColor: '#ffd600',
+                            fill: false,
+                            tension: 0.1,
+                            yAxisID: 'y',
+                            pointRadius: 0,
+                            borderWidth: 1
                         }
                     ]
                 },

@@ -21,6 +21,8 @@ var (
 	dbFileName     = flag.String("db", "measurements.db", "SQLite database filename")
 	exportCSV      = flag.String("export-csv", "", "Export measurements to CSV file and exit")
 	serveDashboard = flag.Bool("dashboard", false, "Serve web dashboard at http://localhost:8080")
+	enableWeather  = flag.Bool("weather", false, "Enable periodic weather data fetching")
+	weatherCity    = flag.String("city", "", "City name for weather data")
 )
 
 func main() {
@@ -48,7 +50,7 @@ func main() {
 
 	portDetails, err := initializeSerialConnection()
 	if err != nil {
-		log.Fatal(err)
+		logError(err.Error())
 		return
 	}
 
@@ -67,6 +69,57 @@ func main() {
 	}
 	defer db.Close()
 
+	var latestWeather Weather
+	var latestWeatherTimestamp int64
+
+	if *enableWeather {
+		weatherTicker := time.NewTicker(1 * time.Minute)
+		defer weatherTicker.Stop()
+
+		city := *weatherCity
+		if city == "" {
+			logError("No city specified for weather data")
+			return
+		}
+
+	weatherInit:
+		for {
+			select {
+			case <-ctx.Done():
+				logInfo("Weather fetching loop stopped")
+				return
+			default:
+				latestWeather, err = GetWeatherData(city)
+				if err == nil {
+					latestWeatherTimestamp = time.Now().UnixMilli()
+					insertWeather(db, latestWeather, latestWeatherTimestamp)
+					break weatherInit
+				}
+				logError("Initial weather fetch failed, retrying in 5s: %v", err)
+				time.Sleep(5 * time.Second)
+			}
+		}
+
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-weatherTicker.C:
+					w, err := GetWeatherData(city)
+					ts := time.Now().UnixMilli()
+					if err == nil {
+						latestWeather = w
+						latestWeatherTimestamp = ts
+						insertWeather(db, latestWeather, latestWeatherTimestamp)
+					} else {
+						throttledLogError(&lastWeatherErr, "Failed to get weather data for city %s: %v", city, err)
+					}
+				}
+			}
+		}()
+	}
+
 	if *serveDashboard {
 		serveAPI(db)
 		http.Handle("/", http.FileServer(http.Dir("web-dashboard-static")))
@@ -76,6 +129,7 @@ func main() {
 			fmt.Printf("Web dashboard served at %s\n", addr)
 			if err := http.ListenAndServe(":8080", nil); err != nil {
 				logError("Dashboard server error: %v", err)
+				return
 			}
 		}()
 	}
@@ -106,12 +160,13 @@ func main() {
 				continue
 			}
 
-			if err := insertMeasurement(db, measurement); err != nil {
+			currentTimestamp := time.Now().UnixMilli()
+			if err := insertMeasurement(db, measurement, currentTimestamp); err != nil {
 				throttledLogError(&lastInsertErr, "Failed to insert measurement into database: %v", err)
 				continue
 			}
 
-			printToConsole(measurement)
+			printToConsole(measurement, &latestWeather)
 		}
 	}
 }
