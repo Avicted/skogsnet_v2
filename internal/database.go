@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -114,8 +115,21 @@ func exportToCSV(db *sql.DB, filename string) error {
 	}
 	defer file.Close()
 
-	// Write header
-	header := "timestamp,temperature,humidity,city,weather_temp,weather_humidity,wind_speed,wind_deg,clouds,weather_code,weather_description\n"
+	fields := []string{
+		"timestamp",
+		"temperature",
+		"humidity",
+		"city",
+		"weather_temp",
+		"weather_humidity",
+		"wind_speed",
+		"wind_deg",
+		"clouds",
+		"weather_code",
+		"weather_description",
+	}
+
+	header := strings.Join(fields, ",") + "\n"
 	if _, err := file.WriteString(header); err != nil {
 		return err
 	}

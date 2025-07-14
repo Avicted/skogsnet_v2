@@ -47,7 +47,7 @@ func serveAPI(db *sql.DB, mux *http.ServeMux) {
 		`, since)
 
 		if err != nil {
-			w.WriteHeader(500)
+			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("DB error"))
 			return
 		}
