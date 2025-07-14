@@ -2,10 +2,15 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"sync"
+	"time"
 )
 
 type GeoResult struct {
@@ -55,6 +60,58 @@ type Weather struct {
 		All int `json:"all"`
 	} `json:"clouds"`
 	Name string `json:"name"`
+}
+
+func startWeatherFetcher(ctx context.Context, db *sql.DB, latestWeather *Weather, latestWeatherTimestamp *int64, wg *sync.WaitGroup) {
+	city := *weatherCity
+	if city == "" {
+		logError("No city specified for weather data")
+		os.Exit(1)
+	}
+
+	weatherTicker := time.NewTicker(weatherFetchInterval)
+	defer weatherTicker.Stop()
+
+weatherInit:
+	for {
+		select {
+		case <-ctx.Done():
+			logInfo("Weather fetching loop stopped")
+			return
+		default:
+			w, err := GetWeatherData(city)
+			if err == nil {
+				*latestWeather = w
+				*latestWeatherTimestamp = time.Now().UnixMilli()
+				insertWeather(db, *latestWeather, *latestWeatherTimestamp)
+				break weatherInit
+			}
+			logError("Initial weather fetch failed, retrying in 5s: %v", err)
+			time.Sleep(weatherFetchRetryDelay)
+		}
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				logInfo("Weather update goroutine stopped")
+				return
+			case <-weatherTicker.C:
+				w, err := GetWeatherData(city)
+				ts := time.Now().UnixMilli()
+				if err == nil {
+					*latestWeather = w
+					*latestWeatherTimestamp = ts
+					insertWeather(db, *latestWeather, *latestWeatherTimestamp)
+				} else {
+					throttledLogError(&lastWeatherErr, "Failed to get weather data for city %s: %v", city, err)
+				}
+			}
+		}
+	}()
 }
 
 // https://open-meteo.com/en/docs#weather_variable_documentation

@@ -4,11 +4,42 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+func mustInitDatabase(dbFileName *string) *sql.DB {
+	db, err := openDatabase(*dbFileName)
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
+	return db
+}
+
+func enableWALMode(db *sql.DB) {
+	_, err := db.Exec("PRAGMA journal_mode=WAL;")
+	if err != nil {
+		logError("Failed to enable WAL mode: %v", err)
+	}
+}
+
+func exportCSVAndExit(dbFileName *string, exportCSV *string) {
+	db, err := openDatabase(*dbFileName)
+	if err != nil {
+		logError("Failed to open database: %v", err)
+		return
+	}
+	defer db.Close()
+	if err := exportToCSV(db, *exportCSV); err != nil {
+		logError("Export to CSV failed: %v", err)
+	} else {
+		logInfo("Exported measurements to %s", *exportCSV)
+	}
+}
 
 func openDatabase(dbPath string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", dbPath)

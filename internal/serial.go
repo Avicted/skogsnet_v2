@@ -3,9 +3,29 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
+	"os"
 
+	"go.bug.st/serial"
 	"go.bug.st/serial/enumerator"
 )
+
+func mustInitSerialPort() serial.Port {
+	portDetails, err := initializeSerialConnection()
+	if err != nil {
+		logError(err.Error())
+		os.Exit(1)
+	}
+
+	mode := &serial.Mode{BaudRate: *baudRate}
+	serialPort, err := serial.Open(portDetails.Name, mode)
+	if err != nil {
+		log.Fatal("Failed to open serial port:", err)
+		os.Exit(1)
+	}
+
+	return serialPort
+}
 
 func initializeSerialConnection() (*enumerator.PortDetails, error) {
 	logInfo("Initializing serial connection...")

@@ -1,11 +1,33 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"sync"
 	"time"
 )
+
+func startDashboardServer(ctx context.Context, db *sql.DB, wg *sync.WaitGroup) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mux := http.NewServeMux()
+		serveAPI(db, mux)
+		mux.Handle("/", http.FileServer(http.Dir("web-dashboard-static")))
+		server := &http.Server{Addr: ":8080", Handler: mux}
+		logInfo("Web dashboard served at http://localhost:8080")
+		go func() {
+			<-ctx.Done()
+			logInfo("Shutting down dashboard server...")
+			server.Shutdown(context.Background())
+		}()
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logError("Dashboard server error: %v", err)
+		}
+	}()
+}
 
 func serveAPI(db *sql.DB, mux *http.ServeMux) {
 	mux.HandleFunc("/api/measurements", func(w http.ResponseWriter, r *http.Request) {
