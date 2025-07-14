@@ -3,8 +3,19 @@ document.addEventListener('DOMContentLoaded', function () {
     let liveInterval = null;
 
     async function fetchData(range) {
-        const res = await fetch('/api/measurements?range=' + (range || ''));
-        return await res.json();
+        try {
+            const res = await fetch('/api/measurements?range=' + (range || ''));
+            if (!res.ok) {
+                throw new Error(`API error: ${res.status} ${res.statusText}`);
+            }
+            return await res.json();
+        } catch (err) {
+            const currentValues = document.getElementById('current-values');
+            if (currentValues) {
+                currentValues.textContent = "Error loading data: " + err.message;
+            }
+            return [];
+        }
     }
 
     function format24h(ts) {

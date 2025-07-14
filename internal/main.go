@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -69,8 +70,15 @@ func main() {
 	}
 	defer db.Close()
 
+	// Enable WAL mode for better concurrency
+	_, err = db.Exec("PRAGMA journal_mode=WAL;")
+	if err != nil {
+		logError("Failed to enable WAL mode: %v", err)
+	}
+
 	var latestWeather Weather
 	var latestWeatherTimestamp int64
+	var waitGroup sync.WaitGroup
 
 	if *enableWeather {
 		weatherTicker := time.NewTicker(1 * time.Minute)
@@ -100,10 +108,13 @@ func main() {
 			}
 		}
 
+		waitGroup.Add(1)
 		go func() {
+			defer waitGroup.Done()
 			for {
 				select {
 				case <-ctx.Done():
+					logInfo("Weather update goroutine stopped")
 					return
 				case <-weatherTicker.C:
 					w, err := GetWeatherData(city)
@@ -121,15 +132,21 @@ func main() {
 	}
 
 	if *serveDashboard {
-		serveAPI(db)
-		http.Handle("/", http.FileServer(http.Dir("web-dashboard-static")))
+		waitGroup.Add(1)
 		go func() {
-			addr := "http://localhost:8080"
-			logInfo("Web dashboard served at %s", addr)
-			fmt.Printf("Web dashboard served at %s\n", addr)
-			if err := http.ListenAndServe(":8080", nil); err != nil {
+			defer waitGroup.Done()
+			mux := http.NewServeMux()
+			serveAPI(db, mux)
+			mux.Handle("/", http.FileServer(http.Dir("web-dashboard-static")))
+			server := &http.Server{Addr: ":8080", Handler: mux}
+			logInfo("Web dashboard served at http://localhost:8080")
+			go func() {
+				<-ctx.Done()
+				logInfo("Shutting down dashboard server...")
+				server.Shutdown(context.Background())
+			}()
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				logError("Dashboard server error: %v", err)
-				return
 			}
 		}()
 	}
@@ -139,6 +156,7 @@ func main() {
 		select {
 		case <-ctx.Done():
 			fmt.Println("Graceful shutdown requested. Exiting...")
+			waitGroup.Wait()
 			return
 		default:
 			line, err := readFromSerial(scanner)

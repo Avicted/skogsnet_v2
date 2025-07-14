@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-func serveAPI(db *sql.DB) {
-	http.HandleFunc("/api/measurements", func(w http.ResponseWriter, r *http.Request) {
+func serveAPI(db *sql.DB, mux *http.ServeMux) {
+	mux.HandleFunc("/api/measurements", func(w http.ResponseWriter, r *http.Request) {
 		rangeParam := r.URL.Query().Get("range")
 		var since int64
 		now := time.Now()
@@ -50,7 +50,8 @@ func serveAPI(db *sql.DB) {
 		`, since, since)
 
 		if err != nil {
-			http.Error(w, "DB error", 500)
+			w.WriteHeader(500)
+			w.Write([]byte("DB error"))
 			return
 		}
 		defer rows.Close()
