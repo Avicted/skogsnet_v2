@@ -135,7 +135,6 @@ func TestExportToCSV(t *testing.T) {
 
 	timestamp := time.Now().UnixMilli()
 
-	// Insert some test data
 	m1 := Measurement{
 		UnixTimestamp:      time.Now().UnixMilli(),
 		TemperatureCelsius: 22.5,
@@ -176,12 +175,12 @@ func TestExportToCSV(t *testing.T) {
 		},
 	}
 
-	if err := insertMeasurement(db, m1, timestamp); err != nil {
-		t.Fatalf("Failed to insert measurement: %v", err)
-	}
-
 	if err := insertWeather(db, weather, timestamp); err != nil {
 		t.Fatalf("Failed to insert weather: %v", err)
+	}
+
+	if err := insertMeasurement(db, m1, timestamp); err != nil {
+		t.Fatalf("Failed to insert measurement: %v", err)
 	}
 
 	csvFile := "test_export.csv"

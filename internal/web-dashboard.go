@@ -41,13 +41,10 @@ func serveAPI(db *sql.DB, mux *http.ServeMux) {
 				w.city, w.temp, w.humidity, w.wind_speed, w.wind_deg, w.clouds, w.weather_code, w.description,
 				w.timestamp as weather_ts
 			FROM measurements m
-			LEFT JOIN weather w ON w.timestamp = (
-				SELECT MAX(w2.timestamp) FROM weather w2
-				WHERE w2.timestamp <= m.timestamp AND w2.timestamp >= ?
-			)
+			LEFT JOIN weather w ON m.weather_id = w.id
 			WHERE m.timestamp >= ?
 			ORDER BY m.timestamp
-		`, since, since)
+		`, since)
 
 		if err != nil {
 			w.WriteHeader(500)

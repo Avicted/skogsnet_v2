@@ -42,7 +42,8 @@ h2 {
     font-weight: 400;
 }
 
-#current-values {
+#current-values,
+#error-message {
     font-size: 1.15em;
     width: 100%;
     margin-left: 110px;

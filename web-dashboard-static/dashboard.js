@@ -3,18 +3,29 @@ document.addEventListener('DOMContentLoaded', function () {
     let liveInterval = null;
 
     async function fetchData(range) {
+        const errorMessage = document.getElementById('error-message');
+        const currentValues = document.getElementById('current-values');
+
         try {
             const res = await fetch('/api/measurements?range=' + (range || ''));
             if (!res.ok) {
                 throw new Error(`API error: ${res.status} ${res.statusText}`);
             }
+
+            errorMessage.style.display = 'none';
+            errorMessage.textContent = '';
+            currentValues.style.display = 'block';
+
             return await res.json();
         } catch (err) {
-            const currentValues = document.getElementById('current-values');
-            if (currentValues) {
-                currentValues.textContent = "Error loading data: " + err.message;
+
+            if (errorMessage) {
+                errorMessage.textContent = "Error loading data: " + err.message + ". Retrying...";
+                errorMessage.style.display = 'block';
+                currentValues.style.display = 'none';
             }
-            return [];
+
+            return null; // Return null to indicate failure
         }
     }
 
@@ -35,6 +46,12 @@ document.addEventListener('DOMContentLoaded', function () {
     async function drawChart() {
         const range = document.getElementById('range').value;
         const data = await fetchData(range);
+
+        // If fetch failed, try again after a short delay
+        if (data === null) {
+            setTimeout(drawChart, 5000);
+            return;
+        }
 
         // Show current temp/humidity (latest data point)
         if (data.length > 0) {

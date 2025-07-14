@@ -18,6 +18,7 @@ func openDatabase(dbPath string) (*sql.DB, error) {
 	createMeasurementTable := `
     CREATE TABLE IF NOT EXISTS measurements (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+		weather_id INTEGER,
         timestamp INTEGER,
         temperature REAL,
         humidity REAL
@@ -55,9 +56,22 @@ func insertMeasurement(db *sql.DB, m Measurement, timestamp int64) error {
 	if db == nil {
 		return errors.New("db is nil")
 	}
-	_, err := db.Exec(
-		"INSERT INTO measurements (timestamp, temperature, humidity) VALUES (?, ?, ?)",
-		timestamp, m.TemperatureCelsius, m.HumidityPercentage,
+
+	// Find nearest weather record within 10 minutes
+	var weatherID sql.NullInt64
+	err := db.QueryRow(`
+        SELECT id FROM weather
+        WHERE ABS(timestamp - ?) < 600000
+        ORDER BY ABS(timestamp - ?) ASC
+        LIMIT 1
+    `, timestamp, timestamp).Scan(&weatherID)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+
+	_, err = db.Exec(
+		"INSERT INTO measurements (timestamp, temperature, humidity, weather_id) VALUES (?, ?, ?, ?)",
+		timestamp, m.TemperatureCelsius, m.HumidityPercentage, nullInt(weatherID),
 	)
 	return err
 }
@@ -105,12 +119,12 @@ func exportToCSV(db *sql.DB, filename string) error {
 	}
 
 	rows, err := db.Query(`
-        SELECT m.timestamp, m.temperature, m.humidity,
-               w.city, w.temp, w.humidity, w.wind_speed, w.wind_deg, w.clouds, w.weather_code, w.description
-        FROM measurements m
-        LEFT JOIN weather w ON m.timestamp = w.timestamp
-        ORDER BY m.timestamp ASC
-    `)
+		SELECT m.timestamp, m.temperature, m.humidity,
+			w.city, w.temp, w.humidity, w.wind_speed, w.wind_deg, w.clouds, w.weather_code, w.description
+		FROM measurements m
+		LEFT JOIN weather w ON m.weather_id = w.id
+		ORDER BY m.timestamp ASC
+	`)
 	if err != nil {
 		return err
 	}
