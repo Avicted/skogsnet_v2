@@ -81,7 +81,8 @@ func main() {
 	var waitGroup sync.WaitGroup
 
 	if *enableWeather {
-		weatherTicker := time.NewTicker(1 * time.Minute)
+		const weatherFetchInterval = 1 * time.Minute
+		weatherTicker := time.NewTicker(weatherFetchInterval)
 		defer weatherTicker.Stop()
 
 		city := *weatherCity
@@ -104,7 +105,9 @@ func main() {
 					break weatherInit
 				}
 				logError("Initial weather fetch failed, retrying in 5s: %v", err)
-				time.Sleep(5 * time.Second)
+
+				const weatherFetchRetryDelay = 500 * time.Millisecond
+				time.Sleep(weatherFetchRetryDelay)
 			}
 		}
 
@@ -168,7 +171,9 @@ func main() {
 			}
 			if line == "" {
 				throttledLogWarn(&lastWarn, "No data read from serial port. Retrying...")
-				time.Sleep(500 * time.Millisecond)
+
+				const serialRetryDelay = 500 * time.Millisecond
+				time.Sleep(serialRetryDelay)
 				continue
 			}
 

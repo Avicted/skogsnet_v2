@@ -58,13 +58,15 @@ func insertMeasurement(db *sql.DB, m Measurement, timestamp int64) error {
 	}
 
 	// Find nearest weather record within 10 minutes
+	const weatherMatchWindowMillis = 600_000
 	var weatherID sql.NullInt64
+
 	err := db.QueryRow(`
 		SELECT id FROM weather
-		WHERE ABS(timestamp - ?) < 600000
+		WHERE ABS(timestamp - ?) < ?
 		ORDER BY ABS(timestamp - ?) ASC
 		LIMIT 1
-	`, timestamp, timestamp).Scan(&weatherID)
+	`, timestamp, weatherMatchWindowMillis, timestamp).Scan(&weatherID)
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
