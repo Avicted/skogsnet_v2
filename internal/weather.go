@@ -121,6 +121,19 @@ func WeatherCodeToSentence(code int) string {
 	}
 }
 
+func WindDirectionToCompass(deg int) string {
+	if deg < 0 || deg > 359 {
+		return ""
+	}
+
+	directions := []string{"N", "NE", "E", "SE", "S", "SW", "W", "NW"}
+
+	// Each direction covers 45 degrees, centered on its midpoint
+	// Offset by 22.5 to align ranges: N = 337.5-22.5, NE = 22.5-67.5, etc.
+	idx := int((float64(deg)+22.5)/45.0) % 8
+	return directions[idx]
+}
+
 func ConvertOpenMeteoToWeather(om OpenMeteoWeather, cityName string) Weather {
 	return Weather{
 		Weather: []struct {
@@ -194,7 +207,7 @@ func GetWeatherData(city string) (Weather, error) {
 	lat := geoResponse.Results[0].Latitude
 	long := geoResponse.Results[0].Longitude
 
-	response, err := http.Get(fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,weather_code,precipitation,relative_humidity_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=kmh&temperature_unit=celsius", lat, long))
+	response, err := http.Get(fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,weather_code,precipitation,relative_humidity_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&temperature_unit=celsius", lat, long))
 	if err != nil {
 		return Weather{}, err
 	}

@@ -70,18 +70,18 @@ Usage of ./build/skogsnet_v2:
 
 - Measurements are stored in a SQLite database file named `measurements.db`.
 - Console output example:
-  ```
-  Measurement at 2025-07-14 13:07:15
-    Temperature:         23.91 °C
-    Humidity:            77.75 %
+```
+Measurement at 2025-07-14 16:50:08
+    Temperature:         23.78 °C
+    Humidity:            76.06 %
 
-    Weather:             Mainly clear
-    Outside Temperature: 28.50 °C
-    Outside Humidity:    49%
-    Wind Speed:          18.40 m/s
-    Wind Direction:      24°
+    Weather:             Overcast
+    Outside Temperature: 27.00 °C
+    Outside Humidity:    44%
+    Wind Speed:          6.60 m/s
+    Wind Direction:      22° N
     Cloud Cover:         0%
-  ```
+```
 
 ## Web Dashboard
 

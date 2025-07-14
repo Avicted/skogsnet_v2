@@ -72,3 +72,37 @@ func TestGetWeatherData(t *testing.T) {
 		t.Error("Expected valid humidity percentage")
 	}
 }
+
+func TestWindDirectionToCompass(t *testing.T) {
+	tests := []struct {
+		degrees int
+		compass string
+	}{
+		{0, "N"},
+		{45, "NE"},
+		{90, "E"},
+		{135, "SE"},
+		{180, "S"},
+		{225, "SW"},
+		{270, "W"},
+		{315, "NW"},
+	}
+
+	for _, test := range tests {
+		result := WindDirectionToCompass(test.degrees)
+		if result != test.compass {
+			t.Errorf("Expected %s for %d degrees, got %s", test.compass, test.degrees, result)
+		}
+	}
+}
+
+func TestWindDirectionToCompassInvalid(t *testing.T) {
+	tests := []int{-1, 360, 400, -100}
+
+	for _, deg := range tests {
+		result := WindDirectionToCompass(deg)
+		if result != "" {
+			t.Errorf("Expected empty string for %d degrees, got %s", deg, result)
+		}
+	}
+}

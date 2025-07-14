@@ -49,7 +49,7 @@ func printToConsole(measurement Measurement, weather *Weather) {
 		fmt.Printf("    %sOutside Temperature:%s %.2f °C\n", green, reset, weather.Main.Temp)
 		fmt.Printf("    %sOutside Humidity:   %s %d%%\n", green, reset, weather.Main.Humidity)
 		fmt.Printf("    %sWind Speed:         %s %.2f m/s\n", green, reset, weather.Wind.Speed)
-		fmt.Printf("    %sWind Direction:     %s %d°\n", green, reset, weather.Wind.Deg)
+		fmt.Printf("    %sWind Direction:     %s %d° %s\n", green, reset, weather.Wind.Deg, WindDirectionToCompass(weather.Wind.Deg))
 		fmt.Printf("    %sCloud Cover:        %s %d%%\n", green, reset, weather.Clouds.All)
 	}
 }
