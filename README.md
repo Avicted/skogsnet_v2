@@ -35,7 +35,9 @@ go test ./internal
 
 The following CLI flags are available:
 
-```sh
+```
+./build/skogsnet_v2 -h
+
 Usage of ./build/skogsnet_v2:
   -baud int
     	Serial baud rate (default 9600)
