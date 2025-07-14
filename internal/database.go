@@ -16,27 +16,27 @@ func openDatabase(dbPath string) (*sql.DB, error) {
 	}
 
 	createMeasurementTable := `
-    CREATE TABLE IF NOT EXISTS measurements (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+	CREATE TABLE IF NOT EXISTS measurements (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		weather_id INTEGER,
-        timestamp INTEGER,
-        temperature REAL,
-        humidity REAL
-    );`
+		timestamp INTEGER,
+		temperature REAL,
+		humidity REAL
+	);`
 
 	createWeatherTable := `
-    CREATE TABLE IF NOT EXISTS weather (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp INTEGER,
-        city TEXT,
-        temp REAL,
-        humidity INTEGER,
-        wind_speed REAL,
-        wind_deg INTEGER,
-        clouds INTEGER,
-        weather_code INTEGER,
-        description TEXT
-    );`
+	CREATE TABLE IF NOT EXISTS weather (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		timestamp INTEGER,
+		city TEXT,
+		temp REAL,
+		humidity INTEGER,
+		wind_speed REAL,
+		wind_deg INTEGER,
+		clouds INTEGER,
+		weather_code INTEGER,
+		description TEXT
+	);`
 
 	_, err = db.Exec(createMeasurementTable)
 	if err != nil {
@@ -60,11 +60,11 @@ func insertMeasurement(db *sql.DB, m Measurement, timestamp int64) error {
 	// Find nearest weather record within 10 minutes
 	var weatherID sql.NullInt64
 	err := db.QueryRow(`
-        SELECT id FROM weather
-        WHERE ABS(timestamp - ?) < 600000
-        ORDER BY ABS(timestamp - ?) ASC
-        LIMIT 1
-    `, timestamp, timestamp).Scan(&weatherID)
+		SELECT id FROM weather
+		WHERE ABS(timestamp - ?) < 600000
+		ORDER BY ABS(timestamp - ?) ASC
+		LIMIT 1
+	`, timestamp, timestamp).Scan(&weatherID)
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
@@ -91,7 +91,7 @@ func insertWeather(db *sql.DB, w Weather, timestamp int64) error {
 	}
 	_, err := db.Exec(
 		`INSERT INTO weather (timestamp, city, temp, humidity, wind_speed, wind_deg, clouds, weather_code, description)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		timestamp,
 		w.Name,
 		w.Main.Temp,
