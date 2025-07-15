@@ -464,7 +464,7 @@ func TestExportToCSV(t *testing.T) {
 	}
 
 	weather := Weather{
-		Name: "Vaasa",
+		Name: "Helsinki",
 		Main: struct {
 			Temp     float64 `json:"temp"`
 			Humidity int     `json:"humidity"`

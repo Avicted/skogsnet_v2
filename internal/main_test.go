@@ -248,31 +248,6 @@ func TestMainLoop_Success(t *testing.T) {
 	// Should process successfully
 }
 
-/* func TestMain_ExportCSV(t *testing.T) {
-	origExportCSVAndExit := exportCSVAndExit
-	origMustInitDatabase := mustInitDatabase
-	origExportCSV := *exportCSV
-
-	exportCSVAndExitCalled := false
-	exportCSVAndExit = func(dbFileName, exportCSV *string) {
-		exportCSVAndExitCalled = true
-	}
-	mustInitDatabase = func(dbFileName *string) (*sql.DB, error) {
-		return &sql.DB{}, nil // Return a dummy DB
-	}
-	*exportCSV = "out.csv"
-	defer func() {
-		exportCSVAndExit = origExportCSVAndExit
-		mustInitDatabase = origMustInitDatabase
-		*exportCSV = origExportCSV // Reset to original value
-	}()
-
-	main()
-	if !exportCSVAndExitCalled {
-		t.Error("Expected exportCSVAndExit to be called")
-	}
-} */
-
 func TestMain_ExportCSV(t *testing.T) {
 	origExportCSVAndExit := exportCSVAndExit
 	origSetupLogging := setupLogging

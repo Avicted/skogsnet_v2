@@ -345,6 +345,97 @@ func TestStartWeatherFetcher_Ticker_Success(t *testing.T) {
 	}
 }
 
+func TestStartWeatherFetcher_Ticker_InsertError(t *testing.T) {
+	origGetWeatherData := GetWeatherData
+	origInsertWeather := insertWeather
+	origThrottledLogError := throttledLogError
+
+	GetWeatherData = func(city string) (Weather, error) {
+		return Weather{Name: city}, nil
+	}
+	insertWeatherCalled := false
+	insertWeather = func(db *sql.DB, w Weather, ts int64) error {
+		insertWeatherCalled = true
+		return fmt.Errorf("insert error")
+	}
+	throttledLogErrorCalled := false
+	throttledLogError = func(last *time.Time, format string, args ...interface{}) {
+		throttledLogErrorCalled = true
+		if !strings.Contains(format, "Failed to insert weather data") {
+			t.Errorf("Expected insert error log, got: %s", format)
+		}
+	}
+	defer func() {
+		GetWeatherData = origGetWeatherData
+		insertWeather = origInsertWeather
+		throttledLogError = origThrottledLogError
+	}()
+
+	db, _ := sql.Open("sqlite3", ":memory:")
+	city := "Helsinki"
+	weatherCity = &city
+	var latestWeather Weather
+	var latestWeatherTimestamp int64
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	weatherTickerInterval = 500 * time.Millisecond
+	go startWeatherFetcher(ctx, db, &latestWeather, &latestWeatherTimestamp, &wg)
+	time.Sleep(1 * time.Second)
+	cancel()
+	wg.Wait()
+
+	if !insertWeatherCalled {
+		t.Error("Expected insertWeather to be called")
+	}
+	if !throttledLogErrorCalled {
+		t.Error("Expected throttledLogError to be called for insert error")
+	}
+}
+
+func TestStartWeatherFetcher_Ticker_GetWeatherError(t *testing.T) {
+	origGetWeatherData := GetWeatherData
+	origThrottledLogError := throttledLogError
+
+	callCount := 0
+	GetWeatherData = func(city string) (Weather, error) {
+		callCount++
+		if callCount == 1 {
+			return Weather{Name: city}, nil // Initial fetch succeeds
+		}
+		return Weather{}, fmt.Errorf("fetch error") // Ticker fetch fails
+	}
+	throttledLogErrorCalled := false
+	throttledLogError = func(last *time.Time, format string, args ...interface{}) {
+		throttledLogErrorCalled = true
+		if !strings.Contains(format, "Failed to get weather data for city") {
+			t.Errorf("Expected get weather error log, got: %s", format)
+		}
+	}
+	defer func() {
+		GetWeatherData = origGetWeatherData
+		throttledLogError = origThrottledLogError
+	}()
+
+	db, _ := sql.Open("sqlite3", ":memory:")
+	city := "Helsinki"
+	weatherCity = &city
+	var latestWeather Weather
+	var latestWeatherTimestamp int64
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	weatherTickerInterval = 500 * time.Millisecond
+	go startWeatherFetcher(ctx, db, &latestWeather, &latestWeatherTimestamp, &wg)
+	time.Sleep(1 * time.Second)
+	cancel()
+	wg.Wait()
+
+	if !throttledLogErrorCalled {
+		t.Error("Expected throttledLogError to be called for GetWeatherData error")
+	}
+}
+
 func TestWindDirectionToCompass(t *testing.T) {
 	tests := []struct {
 		degrees int

@@ -23,6 +23,8 @@ var logInfo = logInfoImpl
 var logWarn = logWarnImpl
 var logError = logErrorImpl
 var logFatal = logFatalImpl
+var throttledLogWarn = throttledLogWarnImpl
+var throttledLogError = throttledLogErrorImpl
 
 func setupLoggingImpl() {
 	if *logFile != "" {
@@ -54,14 +56,14 @@ func logFatalImpl(format string, v ...any) {
 	osExit(1)
 }
 
-func throttledLogWarn(last *time.Time, format string, v ...any) {
+func throttledLogWarnImpl(last *time.Time, format string, v ...any) {
 	if time.Since(*last) > throttleInterval {
 		logWarn(format, v...)
 		*last = time.Now()
 	}
 }
 
-func throttledLogError(last *time.Time, format string, v ...any) {
+func throttledLogErrorImpl(last *time.Time, format string, v ...any) {
 	if time.Since(*last) > throttleInterval {
 		logError(format, v...)
 		*last = time.Now()
