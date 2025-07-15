@@ -4,3 +4,5 @@
 *.csv
 *.log
 build/
+
+coverage.out

@@ -1,36 +1,47 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"log"
-	"os"
 
 	"go.bug.st/serial"
 	"go.bug.st/serial/enumerator"
 )
 
-func mustInitSerialPort() serial.Port {
-	portDetails, err := initializeSerialConnection()
+// Allow both *bufio.Scanner and your *errorScanner can be used.
+type Scanner interface {
+	Scan() bool
+	Text() string
+	Err() error
+}
+
+var serialOpen = serial.Open
+var getSerialPort = getSerialPortImpl
+var readFromSerial = readFromSerialImpl
+var enumeratorGetDetailedPortsList = enumerator.GetDetailedPortsList
+
+func initSerialPort() serial.Port {
+	logInfo("Initializing serial connection...")
+
+	portDetails, err := getSerialPort()
 	if err != nil {
 		logError(err.Error())
-		os.Exit(1)
+		osExit(1)
+		return nil
 	}
 
 	mode := &serial.Mode{BaudRate: *baudRate}
-	serialPort, err := serial.Open(portDetails.Name, mode)
+	serialPort, err := serialOpen(portDetails.Name, mode)
 	if err != nil {
-		log.Fatal("Failed to open serial port:", err)
-		os.Exit(1)
+		logError(fmt.Sprintf("Failed to open serial port: %v", err))
+		osExit(1)
+		return nil
 	}
 
 	return serialPort
 }
 
-func initializeSerialConnection() (*enumerator.PortDetails, error) {
-	logInfo("Initializing serial connection...")
-
-	ports, err := enumerator.GetDetailedPortsList()
+func getSerialPortImpl() (*enumerator.PortDetails, error) {
+	ports, err := enumeratorGetDetailedPortsList()
 	if err != nil {
 		return nil, fmt.Errorf("enumerator error: %w", err)
 	}
@@ -53,7 +64,7 @@ func initializeSerialConnection() (*enumerator.PortDetails, error) {
 	return nil, fmt.Errorf("specified port %s not found in available ports", *portName)
 }
 
-func readFromSerial(scanner *bufio.Scanner) (string, error) {
+func readFromSerialImpl(scanner Scanner) (string, error) {
 	if scanner.Scan() {
 		return scanner.Text(), nil
 	}

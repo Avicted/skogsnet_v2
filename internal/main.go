@@ -45,10 +45,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	serialPort := mustInitSerialPort()
+	serialPort := initSerialPort()
 	defer serialPort.Close()
 
-	db := mustInitDatabase(dbFileName)
+	db, err := mustInitDatabase(dbFileName)
+	if err != nil {
+		logFatal("Could not initialize database: %v", err)
+		osExit(1)
+	}
 	defer db.Close()
 
 	enableWALMode(db)

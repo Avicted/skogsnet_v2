@@ -56,8 +56,6 @@ func serveAPI(db *sql.DB, mux *http.ServeMux) {
 			since = 0 // all data
 		}
 
-		const maxWeatherAgeMillis = int64(1 * 60 * 1000) // 1 minute
-
 		rows, err := db.Query(`
 			SELECT m.timestamp, m.temperature, m.humidity,
 				w.city, w.temp, w.humidity, w.wind_speed, w.wind_deg, w.clouds, w.weather_code, w.description,
@@ -102,26 +100,15 @@ func serveAPI(db *sql.DB, mux *http.ServeMux) {
 				&city, &weatherTemp, &weatherHumidity, &windSpeed, &windDeg, &clouds, &weatherCode, &description,
 				&weatherTs,
 			); err == nil {
-				// Only use weather data if it's not too old
-				if weatherTs.Valid && (c.Timestamp-weatherTs.Int64) <= maxWeatherAgeMillis && (c.Timestamp-weatherTs.Int64) >= 0 {
-					c.City = city.String
-					c.WeatherTemp = weatherTemp.Float64
-					c.WeatherHumidity = weatherHumidity.Int64
-					c.WindSpeed = windSpeed.Float64
-					c.WindDeg = windDeg.Int64
-					c.Clouds = clouds.Int64
-					c.WeatherCode = weatherCode.Int64
-					c.Description = description.String
-				} else {
-					c.City = ""
-					c.WeatherTemp = 0
-					c.WeatherHumidity = 0
-					c.WindSpeed = 0
-					c.WindDeg = 0
-					c.Clouds = 0
-					c.WeatherCode = 0
-					c.Description = ""
-				}
+				c.City = city.String
+				c.WeatherTemp = weatherTemp.Float64
+				c.WeatherHumidity = weatherHumidity.Int64
+				c.WindSpeed = windSpeed.Float64
+				c.WindDeg = windDeg.Int64
+				c.Clouds = clouds.Int64
+				c.WeatherCode = weatherCode.Int64
+				c.Description = description.String
+
 				data = append(data, c)
 			}
 		}

@@ -4,44 +4,75 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func mustInitDatabase(dbFileName *string) *sql.DB {
-	db, err := openDatabase(*dbFileName)
-	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
-	}
-	return db
-}
+var mustInitDatabase = mustInitDatabaseImpl
+var openDatabase = openDatabaseImpl
+var insertWeather = insertWeatherImpl
+var insertMeasurement = insertMeasurementImpl
+var exportCSVAndExit = exportCSVAndExitImpl
 
-func enableWALMode(db *sql.DB) {
-	_, err := db.Exec("PRAGMA journal_mode=WAL;")
-	if err != nil {
-		logError("Failed to enable WAL mode: %v", err)
-	}
-}
-
-func exportCSVAndExit(dbFileName *string, exportCSV *string) {
+func mustInitDatabaseImpl(dbFileName *string) (*sql.DB, error) {
 	db, err := openDatabase(*dbFileName)
 	if err != nil {
 		logError("Failed to open database: %v", err)
+		return nil, err
+	}
+
+	return db, nil
+}
+
+func enableWALMode(db *sql.DB) {
+	if db == nil {
+		logError("Database connection is nil")
+		osExit(1)
+		return
+	}
+
+	_, err := db.Exec("PRAGMA journal_mode = WAL")
+	if err != nil {
+		logError("Failed to enable WAL mode: %v", err)
+		osExit(1)
+		return
+	}
+
+	var mode string
+	row := db.QueryRow("PRAGMA journal_mode")
+	if err := row.Scan(&mode); err != nil || mode != "wal" {
+		logError("WAL mode verification failed: %v, mode=%s", err, mode)
+		osExit(1)
+		return
+	}
+
+	logInfo("WAL mode enabled")
+}
+
+func exportCSVAndExitImpl(dbFileName *string, exportCSV *string) {
+	db, err := openDatabase(*dbFileName)
+	if err != nil {
+		logError("Failed to open database: %v", err)
+		osExit(1)
 		return
 	}
 	defer db.Close()
 	if err := exportToCSV(db, *exportCSV); err != nil {
 		logError("Export to CSV failed: %v", err)
+		osExit(1)
+		return
 	} else {
 		logInfo("Exported measurements to %s", *exportCSV)
 	}
 }
 
-func openDatabase(dbPath string) (*sql.DB, error) {
+func openDatabaseImpl(dbPath string) (*sql.DB, error) {
+	if dbPath == "" {
+		return nil, fmt.Errorf("database path is empty")
+	}
+
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
@@ -84,7 +115,7 @@ func openDatabase(dbPath string) (*sql.DB, error) {
 	return db, nil
 }
 
-func insertMeasurement(db *sql.DB, m Measurement, timestamp int64) error {
+func insertMeasurementImpl(db *sql.DB, m Measurement, timestamp int64) error {
 	if db == nil {
 		return errors.New("db is nil")
 	}
@@ -105,15 +136,22 @@ func insertMeasurement(db *sql.DB, m Measurement, timestamp int64) error {
 
 	_, err = db.Exec(
 		"INSERT INTO measurements (timestamp, temperature, humidity, weather_id) VALUES (?, ?, ?, ?)",
-		timestamp, m.TemperatureCelsius, m.HumidityPercentage, nullInt(weatherID),
+		timestamp, m.TemperatureCelsius, m.HumidityPercentage, func() int64 {
+			if weatherID.Valid {
+				return weatherID.Int64
+			} else {
+				return 0
+			}
+		}(),
 	)
 	return err
 }
 
-func insertWeather(db *sql.DB, w Weather, timestamp int64) error {
+func insertWeatherImpl(db *sql.DB, w Weather, timestamp int64) error {
 	if db == nil {
 		return errors.New("db is nil")
 	}
+
 	var weatherID int
 	var weatherDesc string
 	if len(w.Weather) > 0 {
@@ -123,6 +161,7 @@ func insertWeather(db *sql.DB, w Weather, timestamp int64) error {
 		weatherID = 0
 		weatherDesc = ""
 	}
+
 	_, err := db.Exec(
 		`INSERT INTO weather (timestamp, city, temp, humidity, wind_speed, wind_deg, clouds, weather_code, description)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -136,6 +175,7 @@ func insertWeather(db *sql.DB, w Weather, timestamp int64) error {
 		weatherID,
 		weatherDesc,
 	)
+
 	return err
 }
 
@@ -198,14 +238,62 @@ func exportToCSV(db *sql.DB, filename string) error {
 			ts,
 			temp,
 			hum,
-			nullString(city),
-			nullFloat1(wTemp),
-			nullInt(wHum),
-			nullFloat1(windSpeed),
-			nullInt(windDeg),
-			nullInt(clouds),
-			nullInt(weatherCode),
-			nullString(description),
+			func() string {
+				if city.Valid {
+					return city.String
+				} else {
+					return ""
+				}
+			}(),
+			func() float64 {
+				if wTemp.Valid {
+					return float64(int(wTemp.Float64*10)) / 10
+				} else {
+					return 0
+				}
+			}(),
+			func() int64 {
+				if wHum.Valid {
+					return wHum.Int64
+				} else {
+					return 0
+				}
+			}(),
+			func() float64 {
+				if windSpeed.Valid {
+					return float64(int(windSpeed.Float64*10)) / 10
+				} else {
+					return 0
+				}
+			}(),
+			func() int64 {
+				if windDeg.Valid {
+					return windDeg.Int64
+				} else {
+					return 0
+				}
+			}(),
+			func() int64 {
+				if clouds.Valid {
+					return clouds.Int64
+				} else {
+					return 0
+				}
+			}(),
+			func() int64 {
+				if weatherCode.Valid {
+					return weatherCode.Int64
+				} else {
+					return 0
+				}
+			}(),
+			func() string {
+				if description.Valid {
+					return description.String
+				} else {
+					return ""
+				}
+			}(),
 		)
 		if _, err := file.WriteString(line); err != nil {
 			return err
@@ -213,23 +301,4 @@ func exportToCSV(db *sql.DB, filename string) error {
 	}
 
 	return nil
-}
-
-func nullString(ns sql.NullString) string {
-	if ns.Valid {
-		return ns.String
-	}
-	return ""
-}
-func nullFloat1(nf sql.NullFloat64) float64 {
-	if nf.Valid {
-		return float64(int(nf.Float64*10)) / 10 // one decimal
-	}
-	return 0
-}
-func nullInt(ni sql.NullInt64) int64 {
-	if ni.Valid {
-		return ni.Int64
-	}
-	return 0
 }

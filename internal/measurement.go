@@ -12,7 +12,10 @@ type Measurement struct {
 	HumidityPercentage float64
 }
 
-func deserializeData(data string) (Measurement, error) {
+var deserializeData = deserializeDataImpl
+var printToConsole = printToConsoleImpl
+
+func deserializeDataImpl(data string) (Measurement, error) {
 	var measurement Measurement
 	type raw struct {
 		TemperatureCelsius float64 `json:"temperature_celcius"`
@@ -29,7 +32,7 @@ func deserializeData(data string) (Measurement, error) {
 	return measurement, nil
 }
 
-func printToConsole(measurement Measurement, weather *Weather) {
+func printToConsoleImpl(measurement Measurement, weather *Weather) {
 	t := time.UnixMilli(measurement.UnixTimestamp)
 
 	const (

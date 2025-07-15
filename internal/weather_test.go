@@ -1,75 +1,347 @@
 package main
 
 import (
+	"context"
+	"database/sql"
+	"fmt"
+	"net/http"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
-func TestGetCityLatLong(t *testing.T) {
-	city := "Helsingfors"
-	geoResponse, err := GetCityLatLong(city)
+var originalHTTPGet func(string) (*http.Response, error)
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+// Helper for substring check
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
+}
+
+func TestStartWeatherFetcher_InsertsWeather(t *testing.T) {
+	// Mock the HTTP-dependent functions
+	GetCityLatLong = func(city string) (GeoResponse, error) {
+		if city == "" || city == "InvalidCityName12345" {
+			return GeoResponse{}, fmt.Errorf("no results found for city: %s", city)
+		}
+		return GeoResponse{
+			Results: []GeoResult{{Name: city, Latitude: 60.0, Longitude: 25.0}},
+		}, nil
+	}
+	GetWeatherData = func(city string) (Weather, error) {
+		return Weather{
+			Name: city,
+			Main: struct {
+				Temp     float64 `json:"temp"`
+				Humidity int     `json:"humidity"`
+			}{Temp: 20.0, Humidity: 50},
+			Wind: struct {
+				Speed float64 `json:"speed"`
+				Deg   int     `json:"deg"`
+			}{Speed: 5.0, Deg: 90},
+			Clouds: struct {
+				All int `json:"all"`
+			}{All: 10},
+			Weather: []struct {
+				ID          int    `json:"id"`
+				Main        string `json:"main"`
+				Description string `json:"description"`
+			}{{ID: 800, Main: "Clear", Description: "clear sky"}},
+		}, nil
+	}
+
+	// Use an in-memory SQLite DB
+	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+		t.Fatalf("Failed to open in-memory DB: %v", err)
 	}
+	defer db.Close()
 
-	if len(geoResponse.Results) == 0 {
-		t.Fatalf("Expected results for city %s, got none", city)
-	}
-
-	result := geoResponse.Results[0]
-	if result.Name != city {
-		t.Errorf("Expected city name %s, got %s", city, result.Name)
-	}
-	if result.Latitude == 0 || result.Longitude == 0 {
-		t.Error("Expected valid latitude and longitude")
-	}
-}
-
-func TestGetCityLatLongInvalidCity(t *testing.T) {
-	city := "InvalidCityName12345"
-	_, err := GetCityLatLong(city)
-	if err == nil {
-		t.Fatalf("Expected error for invalid city, got none")
-	}
-
-	expectedError := "no results found for city: " + city
-	if err.Error() != expectedError {
-		t.Errorf("Expected error message '%s', got '%s'", expectedError, err.Error())
-	}
-}
-
-func TestGetCityLatLongEmptyCity(t *testing.T) {
-	_, err := GetCityLatLong("")
-	if err == nil {
-		t.Fatalf("Expected error for empty city name, got none")
-	}
-
-	expectedError := "no results found for city: "
-	if err.Error() != expectedError {
-		t.Errorf("Expected error message '%s', got '%s'", expectedError, err.Error())
-	}
-}
-
-func TestGetWeatherData(t *testing.T) {
-	city := "Helsingfors"
-	weather, err := GetWeatherData(city)
+	// Create weather table (minimal schema for insertWeather)
+	_, err = db.Exec(`
+        CREATE TABLE IF NOT EXISTS weather (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp INTEGER,
+            city TEXT,
+            temp REAL,
+            humidity INTEGER,
+            wind_speed REAL,
+            wind_deg INTEGER,
+            clouds INTEGER,
+            weather_code INTEGER,
+            description TEXT
+        );
+    `)
 	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+		t.Fatalf("Failed to create weather table: %v", err)
 	}
 
-	if weather.Name != city {
-		t.Errorf("Expected city name %s, got %s", city, weather.Name)
+	// Set required global flag
+	city := "Helsinki"
+	weatherCity = &city
+
+	var latestWeather Weather
+	var latestWeatherTimestamp int64
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Run the fetcher
+	go startWeatherFetcher(ctx, db, &latestWeather, &latestWeatherTimestamp, &wg)
+
+	// Wait for initial fetch and insert
+	time.Sleep(2 * time.Second)
+	cancel()
+	wg.Wait()
+
+	// Check that weather was inserted
+	var count int
+	row := db.QueryRow("SELECT COUNT(*) FROM weather WHERE city = ?", city)
+	if err := row.Scan(&count); err != nil {
+		t.Fatalf("Failed to query weather table: %v", err)
 	}
-	if weather.Main.Temp == 0 {
-		t.Error("Expected valid temperature")
+	if count == 0 {
+		t.Error("Expected at least one weather row inserted")
 	}
-	if weather.Wind.Speed == 0 {
-		t.Error("Expected valid wind speed")
+}
+
+func TestStartWeatherFetcher_EmptyCity(t *testing.T) {
+	// Save and restore original osExit
+	origOsExit := osExit
+	defer func() { osExit = origOsExit }()
+
+	// Mock osExit to panic so we can catch it
+	osExit = func(code int) { panic(fmt.Sprintf("osExit called with code %d", code)) }
+
+	// Set weatherCity to empty
+	weatherCity = new(string)
+	*weatherCity = ""
+
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to open in-memory DB: %v", err)
 	}
-	if weather.Clouds.All < 0 {
-		t.Error("Expected valid cloud cover percentage")
+	defer db.Close()
+
+	var latestWeather Weather
+	var latestWeatherTimestamp int64
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected osExit to be called, but it was not")
+		}
+	}()
+
+	startWeatherFetcher(ctx, db, &latestWeather, &latestWeatherTimestamp, &wg)
+}
+
+func TestStartWeatherFetcher_ContextCancel(t *testing.T) {
+
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to open in-memory DB: %v", err)
 	}
-	if weather.Main.Humidity < 0 {
-		t.Error("Expected valid humidity percentage")
+	defer db.Close()
+
+	var latestWeather Weather
+	var latestWeatherTimestamp int64
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	weatherCity = new(string)
+	*weatherCity = "Helsinki"
+
+	go startWeatherFetcher(ctx, db, &latestWeather, &latestWeatherTimestamp, &wg)
+
+	// Cancel context to trigger exit
+	cancel()
+	wg.Wait()
+
+	// Assert that the fetcher exits cleanly
+	select {
+	case <-time.After(1 * time.Second):
+		t.Error("Expected fetcher to exit cleanly after context cancel, but it did not")
+	default:
+		// Fetcher exited as expected
+	}
+}
+
+func TestStartWeatherFetcher_InsertWeatherError(t *testing.T) {
+	// Save and restore original logError
+	origLogError := logError
+	called := false
+	var loggedMsg string
+	logError = func(format string, args ...interface{}) {
+		called = true
+		loggedMsg = fmt.Sprintf(format, args...)
+	}
+	defer func() { logError = origLogError }()
+
+	// Set up a DB that will fail on insert
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to open in-memory DB: %v", err)
+	}
+	defer db.Close()
+
+	// Create a weather table with missing columns to force an insert error
+	_, err = db.Exec(`CREATE TABLE weather (id INTEGER PRIMARY KEY)`)
+	if err != nil {
+		t.Fatalf("Failed to create broken weather table: %v", err)
+	}
+
+	city := "Helsinki"
+	weatherCity = &city
+
+	var latestWeather Weather
+	var latestWeatherTimestamp int64
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Run the fetcher (should fail to insert)
+	go startWeatherFetcher(ctx, db, &latestWeather, &latestWeatherTimestamp, &wg)
+	time.Sleep(1 * time.Second)
+	cancel()
+	wg.Wait()
+
+	// Assert that the error was logged
+	if !called {
+		t.Error("Expected logError to be called on insert error")
+	}
+	if loggedMsg == "" || !contains(loggedMsg, "Failed to insert initial weather data") {
+		t.Errorf("Expected logError message about insert failure, got: %s", loggedMsg)
+	}
+}
+
+func TestStartWeatherFetcher_InitialFetchRetry(t *testing.T) {
+	// Save and restore original logError and GetWeatherData
+	origLogError := logError
+	origGetWeatherData := GetWeatherData
+	called := false
+	var loggedMsg string
+	logError = func(format string, args ...interface{}) {
+		called = true
+		loggedMsg = fmt.Sprintf(format, args...)
+	}
+	GetWeatherData = func(city string) (Weather, error) {
+		return Weather{}, fmt.Errorf("simulated fetch error")
+	}
+	defer func() {
+		logError = origLogError
+		GetWeatherData = origGetWeatherData
+	}()
+
+	// Use an in-memory SQLite DB
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to open in-memory DB: %v", err)
+	}
+	defer db.Close()
+
+	// Create weather table (minimal schema for insertWeather)
+	_, err = db.Exec(`
+        CREATE TABLE IF NOT EXISTS weather (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp INTEGER,
+            city TEXT,
+            temp REAL,
+            humidity INTEGER,
+            wind_speed REAL,
+            wind_deg INTEGER,
+            clouds INTEGER,
+            weather_code INTEGER,
+            description TEXT
+        );
+    `)
+	if err != nil {
+		t.Fatalf("Failed to create weather table: %v", err)
+	}
+
+	city := "Helsinki"
+	weatherCity = &city
+
+	var latestWeather Weather
+	var latestWeatherTimestamp int64
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Run the fetcher (should fail and retry)
+	go startWeatherFetcher(ctx, db, &latestWeather, &latestWeatherTimestamp, &wg)
+	time.Sleep(1 * time.Second) // Give it time to hit the error and retry
+	cancel()
+	wg.Wait()
+
+	// Assert that the error was logged
+	if !called {
+		t.Error("Expected logError to be called on initial fetch error")
+	}
+	if loggedMsg == "" || !contains(loggedMsg, "Initial weather fetch failed, retrying in 5s") {
+		t.Errorf("Expected logError message about initial fetch retry, got: %s", loggedMsg)
+	}
+}
+
+func TestStartWeatherFetcher_Ticker_Success(t *testing.T) {
+	origGetWeatherData := GetWeatherData
+	origInsertWeather := insertWeather
+	origLogInfo := logInfo
+
+	GetWeatherData = func(city string) (Weather, error) {
+		return Weather{Name: city}, nil
+	}
+	insertWeather = func(db *sql.DB, w Weather, ts int64) error {
+		return nil
+	}
+	logCalled := false
+	logInfo = func(format string, args ...interface{}) {
+		if strings.Contains(format, "Weather data updated successfully") {
+			logCalled = true
+		}
+	}
+	defer func() {
+		GetWeatherData = origGetWeatherData
+		insertWeather = origInsertWeather
+		logInfo = origLogInfo
+	}()
+
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to open DB: %v", err)
+	}
+	defer db.Close()
+
+	city := "Helsinki"
+	weatherCity = &city
+	var latestWeather Weather
+	var latestWeatherTimestamp int64
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	weatherTickerInterval = 500 * time.Millisecond // Shorten ticker interval for test speed
+
+	go startWeatherFetcher(ctx, db, &latestWeather, &latestWeatherTimestamp, &wg)
+	time.Sleep(2 * time.Second)
+	cancel()
+	wg.Wait()
+
+	if !logCalled {
+		t.Error("Expected logInfo to be called for successful ticker update")
 	}
 }
 
@@ -103,6 +375,51 @@ func TestWindDirectionToCompassInvalid(t *testing.T) {
 		result := WindDirectionToCompass(deg)
 		if result != "" {
 			t.Errorf("Expected empty string for %d degrees, got %s", deg, result)
+		}
+	}
+}
+
+func TestWeatherCodeToSentence_AllCases(t *testing.T) {
+	tests := []struct {
+		code     int
+		expected string
+	}{
+		{0, "Clear sky"},
+		{1, "Mainly clear"},
+		{2, "Partly cloudy"},
+		{3, "Overcast"},
+		{45, "Fog"},
+		{48, "Depositing rime fog"},
+		{51, "Light drizzle"},
+		{53, "Moderate drizzle"},
+		{55, "Dense drizzle"},
+		{56, "Light freezing drizzle"},
+		{57, "Dense freezing drizzle"},
+		{61, "Slight rain"},
+		{63, "Moderate rain"},
+		{65, "Heavy rain"},
+		{66, "Light freezing rain"},
+		{67, "Heavy freezing rain"},
+		{71, "Slight snow fall"},
+		{73, "Moderate snow fall"},
+		{75, "Heavy snow fall"},
+		{77, "Snow grains"},
+		{80, "Slight rain showers"},
+		{81, "Moderate rain showers"},
+		{82, "Violent rain showers"},
+		{85, "Slight snow showers"},
+		{86, "Heavy snow showers"},
+		{95, "Thunderstorm"},
+		{96, "Thunderstorm with slight hail"},
+		{99, "Thunderstorm with heavy hail"},
+		{-1, "Unknown weather code"},
+		{999, "Unknown weather code"},
+	}
+
+	for _, test := range tests {
+		result := WeatherCodeToSentence(test.code)
+		if result != test.expected {
+			t.Errorf("For code %d, expected '%s', got '%s'", test.code, test.expected, result)
 		}
 	}
 }

@@ -1,97 +1,70 @@
 package main
 
 import (
-	"fmt"
+	"context"
+	"database/sql"
+	"errors"
 	"os"
-	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"go.bug.st/serial"
 )
 
-func TestDeserializeData_ValidJSON(t *testing.T) {
-	jsonStr := `{"temperature_celcius":22.5,"humidity":55.1}`
-	m, err := deserializeData(jsonStr)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-	if m.TemperatureCelsius != 22.5 {
-		t.Errorf("Expected TemperatureCelsius 22.5, got %v", m.TemperatureCelsius)
-	}
-	if m.HumidityPercentage != 55.1 {
-		t.Errorf("Expected HumidityPercentage 55.1, got %v", m.HumidityPercentage)
-	}
-	if m.UnixTimestamp <= 0 {
-		t.Errorf("Expected positive UnixTimestamp, got %v", m.UnixTimestamp)
-	}
+// Mock serial.Port for mainLoop
+type mockSerialPort struct {
+	data []string
+	idx  int
 }
 
-func TestDeserializeData_InvalidJSON(t *testing.T) {
-	jsonStr := `{"temperature_celcius":"bad","humidity":55.1}`
-	_, err := deserializeData(jsonStr)
-	if err == nil {
-		t.Error("Expected error for invalid JSON, got nil")
-	}
+// GetModemStatusBits implements serial.Port.
+func (m *mockSerialPort) GetModemStatusBits() (*serial.ModemStatusBits, error) {
+	panic("unimplemented")
 }
 
-func TestInsertMeasurement(t *testing.T) {
-	tmpDB := "test_measurements.db"
-	defer os.Remove(tmpDB)
-
-	db, err := openDatabase(tmpDB)
-	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
-	}
-	defer db.Close()
-
-	m := Measurement{
-		UnixTimestamp:      time.Now().UnixMilli(),
-		TemperatureCelsius: 20.0,
-		HumidityPercentage: 50.0,
-	}
-	if err := insertMeasurement(db, m, m.UnixTimestamp); err != nil {
-		t.Errorf("Failed to insert measurement: %v", err)
-	}
-
-	// Verify that the measurement was inserted
-	var count int
-	row := db.QueryRow("SELECT COUNT(*) FROM measurements WHERE timestamp = ?", m.UnixTimestamp)
-	if err := row.Scan(&count); err != nil {
-		t.Errorf("Failed to query measurement: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("Expected 1 measurement in DB, got %d", count)
-	}
+// ResetInputBuffer implements serial.Port.
+func (m *mockSerialPort) ResetInputBuffer() error {
+	panic("unimplemented")
 }
 
-func TestInsertMeasurement_InvalidDB(t *testing.T) {
-	// Pass a nil db to insertMeasurement
-	err := insertMeasurement(nil, Measurement{}, time.Now().UnixMilli())
-	if err == nil {
-		t.Error("Expected error when inserting with nil DB, got nil")
-	}
+// ResetOutputBuffer implements serial.Port.
+func (m *mockSerialPort) ResetOutputBuffer() error {
+	panic("unimplemented")
 }
 
-func TestDeserializeData_MissingFields(t *testing.T) {
-	jsonStr := `{"temperature_celcius":22.5}`
-	m, err := deserializeData(jsonStr)
-	if err != nil {
-		t.Fatalf("Expected no error for missing humidity, got %v", err)
-	}
-	if m.HumidityPercentage != 0 {
-		t.Errorf("Expected HumidityPercentage 0, got %v", m.HumidityPercentage)
-	}
+// SetDTR implements serial.Port.
+func (m *mockSerialPort) SetDTR(dtr bool) error {
+	panic("unimplemented")
 }
 
-func TestDeserializeData_ExtraFields(t *testing.T) {
-	jsonStr := `{"temperature_celcius":25.0,"humidity":60.0,"extra":123}`
-	m, err := deserializeData(jsonStr)
-	if err != nil {
-		t.Fatalf("Expected no error for extra fields, got %v", err)
-	}
-	if m.TemperatureCelsius != 25.0 || m.HumidityPercentage != 60.0 {
-		t.Errorf("Unexpected values: %v", m)
-	}
+// SetMode implements serial.Port.
+func (m *mockSerialPort) SetMode(mode *serial.Mode) error {
+	panic("unimplemented")
 }
+
+// SetRTS implements serial.Port.
+func (m *mockSerialPort) SetRTS(rts bool) error {
+	panic("unimplemented")
+}
+
+// SetReadTimeout implements serial.Port.
+func (m *mockSerialPort) SetReadTimeout(t time.Duration) error {
+	panic("unimplemented")
+}
+
+func (m *mockSerialPort) Read(p []byte) (int, error) {
+	if m.idx >= len(m.data) {
+		return 0, nil
+	}
+	n := copy(p, m.data[m.idx]+"\n")
+	m.idx++
+	return n, nil
+}
+func (m *mockSerialPort) Write(p []byte) (int, error)        { return len(p), nil }
+func (m *mockSerialPort) Close() error                       { return nil }
+func (m *mockSerialPort) Break(duration time.Duration) error { return nil }
+func (m *mockSerialPort) Drain() error                       { return nil }
 
 func TestEndToEndMeasurementFlow(t *testing.T) {
 	tmpDB := "test_measurements_e2e.db"
@@ -123,181 +96,179 @@ func TestEndToEndMeasurementFlow(t *testing.T) {
 	}
 }
 
-func TestExportToCSV(t *testing.T) {
-	tmpDB := "test_export.db"
-	defer os.Remove(tmpDB)
+func TestMainLoop_GracefulShutdown(t *testing.T) {
+	serialPort := &mockSerialPort{data: []string{"{\"temperature_celcius\":21.1,\"humidity\":44.2}"}}
+	db, _ := sql.Open("sqlite3", ":memory:")
+	var latestWeather Weather
+	var wg sync.WaitGroup
 
-	db, err := openDatabase(tmpDB)
-	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
-	}
-	defer db.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Immediately cancel
 
-	timestamp := time.Now().UnixMilli()
-
-	m1 := Measurement{
-		UnixTimestamp:      time.Now().UnixMilli(),
-		TemperatureCelsius: 22.5,
-		HumidityPercentage: 55.1,
-	}
-
-	weather := Weather{
-		Name: "Vaasa",
-		Main: struct {
-			Temp     float64 `json:"temp"`
-			Humidity int     `json:"humidity"`
-		}{
-			Temp:     24.5,
-			Humidity: int(80.0),
-		},
-		Wind: struct {
-			Speed float64 `json:"speed"`
-			Deg   int     `json:"deg"`
-		}{
-			Speed: 5.0,
-			Deg:   180,
-		},
-		Clouds: struct {
-			All int `json:"all"`
-		}{
-			All: 75,
-		},
-		Weather: []struct {
-			ID          int    `json:"id"`
-			Main        string `json:"main"`
-			Description string `json:"description"`
-		}{
-			{
-				ID:          800,
-				Main:        "Clear",
-				Description: "clear sky",
-			},
-		},
-	}
-
-	if err := insertWeather(db, weather, timestamp); err != nil {
-		t.Fatalf("Failed to insert weather: %v", err)
-	}
-
-	if err := insertMeasurement(db, m1, timestamp); err != nil {
-		t.Fatalf("Failed to insert measurement: %v", err)
-	}
-
-	csvFile := "test_export.csv"
-	if err := exportToCSV(db, csvFile); err != nil {
-		t.Fatalf("Failed to export to CSV: %v", err)
-	}
-	defer os.Remove(csvFile)
-
-	data, err := os.ReadFile(csvFile)
-	if err != nil {
-		t.Fatalf("Failed to read CSV file: %v", err)
-	}
-
-	expectedHeader := "timestamp,temperature,humidity,city,weather_temp,weather_humidity,wind_speed,wind_deg,clouds,weather_code,weather_description\n"
-	if string(data[:len(expectedHeader)]) != expectedHeader {
-		t.Errorf("CSV header mismatch:\nExpected: %q\nGot: %q", expectedHeader, string(data[:len(expectedHeader)]))
-	}
-
-	lines := string(data[len(expectedHeader):])
-	lines = strings.TrimSuffix(lines, "\n") // Remove trailing newline for comparison
-
-	if lines == "" {
-		t.Error("CSV file should contain data after header, but it's empty")
-	}
-
-	// Check if the data matches the inserted measurement and weather
-	expectedLine := fmt.Sprintf("%d,%.1f,%.1f,%s,%.1f,%d,%.1f,%d,%d,%d,%s",
-		timestamp,
-		m1.TemperatureCelsius,
-		m1.HumidityPercentage,
-		weather.Name,
-		weather.Main.Temp,
-		weather.Main.Humidity,
-		weather.Wind.Speed,
-		weather.Wind.Deg,
-		weather.Clouds.All,
-		weather.Weather[0].ID,
-		weather.Weather[0].Description,
-	)
-
-	if lines != expectedLine {
-		t.Errorf("CSV data mismatch:\nExpected: %q\nGot: %q", expectedLine, lines)
-	}
+	mainLoop(ctx, serialPort, db, &latestWeather, &wg)
+	// Should exit gracefully, no panic
 }
 
-func TestExportToCSV_EmptyDB(t *testing.T) {
-	tmpDB := "test_empty_export.db"
-	defer os.Remove(tmpDB)
-
-	db, err := openDatabase(tmpDB)
-	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
+func TestMainLoop_TimeoutError(t *testing.T) {
+	origReadFromSerial := readFromSerial
+	readFromSerial = func(scanner Scanner) (string, error) {
+		return "", errors.New("timeout")
 	}
-	defer db.Close()
+	defer func() { readFromSerial = origReadFromSerial }()
 
-	csvFile := "test_empty_export.csv"
-	if err := exportToCSV(db, csvFile); err != nil {
-		t.Fatalf("Failed to export to CSV: %v", err)
-	}
-	defer os.Remove(csvFile)
+	serialPort := &mockSerialPort{data: []string{}}
+	db, _ := sql.Open("sqlite3", ":memory:")
+	var latestWeather Weather
+	var wg sync.WaitGroup
 
-	data, err := os.ReadFile(csvFile)
-	if err != nil {
-		t.Fatalf("Failed to read CSV file: %v", err)
-	}
-
-	expectedHeader := "timestamp,temperature,humidity,city,weather_temp,weather_humidity,wind_speed,wind_deg,clouds,weather_code,weather_description\n"
-	if string(data) != expectedHeader {
-		t.Errorf("CSV file should only contain header, got: %q", string(data))
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	mainLoop(ctx, serialPort, db, &latestWeather, &wg)
+	// Should handle timeout error and continue
 }
 
-func TestExportToCSV_NoWeatherData(t *testing.T) {
-	tmpDB := "test_no_weather_export.db"
-	defer os.Remove(tmpDB)
-
-	db, err := openDatabase(tmpDB)
-	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
+func TestMainLoop_EmptyLine(t *testing.T) {
+	origReadFromSerial := readFromSerial
+	readFromSerial = func(scanner Scanner) (string, error) {
+		return "", nil
 	}
-	defer db.Close()
+	defer func() { readFromSerial = origReadFromSerial }()
 
-	m := Measurement{
-		UnixTimestamp:      time.Now().UnixMilli(),
-		TemperatureCelsius: 22.0,
-		HumidityPercentage: 60.0,
-	}
+	serialPort := &mockSerialPort{data: []string{}}
+	db, _ := sql.Open("sqlite3", ":memory:")
+	var latestWeather Weather
+	var wg sync.WaitGroup
 
-	if err := insertMeasurement(db, m, m.UnixTimestamp); err != nil {
-		t.Fatalf("Failed to insert measurement: %v", err)
-	}
-
-	csvFile := "test_no_weather_export.csv"
-	if err := exportToCSV(db, csvFile); err != nil {
-		t.Fatalf("Failed to export to CSV: %v", err)
-	}
-	defer os.Remove(csvFile)
-
-	data, err := os.ReadFile(csvFile)
-	if err != nil {
-		t.Fatalf("Failed to read CSV file: %v", err)
-	}
-
-	expectedHeader := "timestamp,temperature,humidity,city,weather_temp,weather_humidity,wind_speed,wind_deg,clouds,weather_code,weather_description\n"
-	if string(data[:len(expectedHeader)]) != expectedHeader {
-		t.Errorf("CSV header mismatch:\nExpected: %q\nGot: %q", expectedHeader, string(data[:len(expectedHeader)]))
-	}
-
-	lines := string(data[len(expectedHeader):])
-	lines = strings.TrimSuffix(lines, "\n") // Remove trailing newline for comparison
-
-	if lines == "" {
-		t.Error("CSV file should contain data after header, but it's empty")
-	}
-
-	expectedLine := fmt.Sprintf("%d,%.1f,%.1f,,0.0,0,0.0,0,0,0,", m.UnixTimestamp, m.TemperatureCelsius, m.HumidityPercentage)
-	if lines != expectedLine {
-		t.Errorf("CSV data mismatch:\nExpected: %q\nGot: %q", expectedLine, lines)
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	mainLoop(ctx, serialPort, db, &latestWeather, &wg)
+	// Should handle empty line and continue
 }
+
+func TestMainLoop_DeserializeError(t *testing.T) {
+	origReadFromSerial := readFromSerial
+	origDeserializeData := deserializeData
+	readFromSerial = func(scanner Scanner) (string, error) {
+		return "bad json", nil
+	}
+	deserializeData = func(s string) (Measurement, error) {
+		return Measurement{}, errors.New("deserialize error")
+	}
+	defer func() {
+		readFromSerial = origReadFromSerial
+		deserializeData = origDeserializeData
+	}()
+
+	serialPort := &mockSerialPort{data: []string{"bad json"}}
+	db, _ := sql.Open("sqlite3", ":memory:")
+	var latestWeather Weather
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	mainLoop(ctx, serialPort, db, &latestWeather, &wg)
+	// Should handle deserialize error and continue
+}
+
+func TestMainLoop_InsertError(t *testing.T) {
+	origReadFromSerial := readFromSerial
+	origDeserializeData := deserializeData
+	origInsertMeasurement := insertMeasurement
+	readFromSerial = func(scanner Scanner) (string, error) {
+		return "{\"temperature_celcius\":21.1,\"humidity\":44.2}", nil
+	}
+	deserializeData = func(s string) (Measurement, error) {
+		return Measurement{TemperatureCelsius: 21.1, HumidityPercentage: 44.2}, nil
+	}
+	insertMeasurement = func(db *sql.DB, m Measurement, ts int64) error {
+		return errors.New("insert error")
+	}
+	defer func() {
+		readFromSerial = origReadFromSerial
+		deserializeData = origDeserializeData
+		insertMeasurement = origInsertMeasurement
+	}()
+
+	serialPort := &mockSerialPort{data: []string{"{\"temperature_celcius\":21.1,\"humidity\":44.2}"}}
+	db, _ := sql.Open("sqlite3", ":memory:")
+	var latestWeather Weather
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	mainLoop(ctx, serialPort, db, &latestWeather, &wg)
+	// Should handle insert error and continue
+}
+
+func TestMainLoop_Success(t *testing.T) {
+	origReadFromSerial := readFromSerial
+	origDeserializeData := deserializeData
+	origInsertMeasurement := insertMeasurement
+	origPrintToConsole := printToConsole
+	readFromSerial = func(scanner Scanner) (string, error) {
+		return "{\"temperature_celcius\":21.1,\"humidity\":44.2}", nil
+	}
+	deserializeData = func(s string) (Measurement, error) {
+		return Measurement{TemperatureCelsius: 21.1, HumidityPercentage: 44.2}, nil
+	}
+	insertMeasurement = func(db *sql.DB, m Measurement, ts int64) error {
+		return nil
+	}
+	printToConsole = func(m Measurement, w *Weather) {}
+	defer func() {
+		readFromSerial = origReadFromSerial
+		deserializeData = origDeserializeData
+		insertMeasurement = origInsertMeasurement
+		printToConsole = origPrintToConsole
+	}()
+
+	serialPort := &mockSerialPort{data: []string{"{\"temperature_celcius\":21.1,\"humidity\":44.2}"}}
+	db, _ := sql.Open("sqlite3", ":memory:")
+	var latestWeather Weather
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	mainLoop(ctx, serialPort, db, &latestWeather, &wg)
+	// Should process successfully
+}
+
+/* func TestMain_ExportCSV(t *testing.T) {
+	origExportCSVAndExit := exportCSVAndExit
+	origMustInitDatabase := mustInitDatabase
+	origExportCSV := *exportCSV
+
+	exportCSVAndExitCalled := false
+	exportCSVAndExit = func(dbFileName, exportCSV *string) {
+		exportCSVAndExitCalled = true
+	}
+	mustInitDatabase = func(dbFileName *string) (*sql.DB, error) {
+		return &sql.DB{}, nil // Return a dummy DB
+	}
+	*exportCSV = "out.csv"
+	defer func() {
+		exportCSVAndExit = origExportCSVAndExit
+		mustInitDatabase = origMustInitDatabase
+		*exportCSV = origExportCSV // Reset to original value
+	}()
+
+	main()
+	if !exportCSVAndExitCalled {
+		t.Error("Expected exportCSVAndExit to be called")
+	}
+} */

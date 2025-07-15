@@ -69,7 +69,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const temp = movingAverage(data.map(m => m.temperature), 5);
         const hum = movingAverage(data.map(m => m.humidity), 5);
 
-        // For weatherTemp, only plot non-zero values, and align labels
         const weatherTemp = [];
         for (let i = 0; i < data.length; i++) {
             weatherTemp.push(data[i].weather_temp !== 0 ? data[i].weather_temp : null);

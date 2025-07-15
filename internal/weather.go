@@ -8,10 +8,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 )
+
+var GetCityLatLong = getCityLatLongImpl
+var GetWeatherData = getWeatherDataImpl
+
+var weatherTickerInterval = time.Minute
+var httpClient = http.DefaultClient
 
 type GeoResult struct {
 	ID        int     `json:"id"`
@@ -66,11 +71,11 @@ func startWeatherFetcher(ctx context.Context, db *sql.DB, latestWeather *Weather
 	city := *weatherCity
 	if city == "" {
 		logError("No city specified for weather data")
-		os.Exit(1)
+		osExit(1)
+		return
 	}
 
-	weatherTicker := time.NewTicker(weatherFetchInterval)
-	defer weatherTicker.Stop()
+	weatherTicker := time.NewTicker(weatherTickerInterval)
 
 weatherInit:
 	for {
@@ -83,7 +88,13 @@ weatherInit:
 			if err == nil {
 				*latestWeather = w
 				*latestWeatherTimestamp = time.Now().UnixMilli()
-				insertWeather(db, *latestWeather, *latestWeatherTimestamp)
+				err := insertWeather(db, *latestWeather, *latestWeatherTimestamp)
+				if err != nil {
+					logError("Failed to insert initial weather data: %v", err)
+				} else {
+					logInfo("Initial weather data fetched and stored successfully")
+				}
+
 				break weatherInit
 			}
 			logError("Initial weather fetch failed, retrying in 5s: %v", err)
@@ -105,7 +116,12 @@ weatherInit:
 				if err == nil {
 					*latestWeather = w
 					*latestWeatherTimestamp = ts
-					insertWeather(db, *latestWeather, *latestWeatherTimestamp)
+					err := insertWeather(db, *latestWeather, *latestWeatherTimestamp)
+					if err != nil {
+						throttledLogError(&lastWeatherErr, "Failed to insert weather data: %v", err)
+					} else {
+						logInfo("Weather data updated successfully for city %s", city)
+					}
 				} else {
 					throttledLogError(&lastWeatherErr, "Failed to get weather data for city %s: %v", city, err)
 				}
@@ -183,11 +199,15 @@ func WindDirectionToCompass(deg int) string {
 		return ""
 	}
 
-	directions := []string{"N", "NE", "E", "SE", "S", "SW", "W", "NW"}
-
 	// Each direction covers 45 degrees, centered on its midpoint
 	// Offset by 22.5 to align ranges: N = 337.5-22.5, NE = 22.5-67.5, etc.
-	idx := int((float64(deg)+22.5)/45.0) % 8
+	directions := []string{"N", "NE", "E", "SE", "S", "SW", "W", "NW"}
+	const degPerDirection = 45.0
+	const offset = degPerDirection / 2.0
+	const directionsCount = 8
+
+	idx := int((float64(deg) + offset) / degPerDirection)
+
 	return directions[idx]
 }
 
@@ -232,8 +252,8 @@ func ConvertOpenMeteoToWeather(om OpenMeteoWeather, cityName string) Weather {
 	}
 }
 
-func GetCityLatLong(city string) (GeoResponse, error) {
-	response, err := http.Get("https://geocoding-api.open-meteo.com/v1/search?name=" + city + "&count=1")
+func getCityLatLongImpl(city string) (GeoResponse, error) {
+	response, err := httpClient.Get("https://geocoding-api.open-meteo.com/v1/search?name=" + city + "&count=1")
 	if err != nil {
 		return GeoResponse{}, err
 	}
@@ -255,7 +275,7 @@ func GetCityLatLong(city string) (GeoResponse, error) {
 	return geoResponse, nil
 }
 
-func GetWeatherData(city string) (Weather, error) {
+func getWeatherDataImpl(city string) (Weather, error) {
 	geoResponse, err := GetCityLatLong(city)
 	if err != nil {
 		return Weather{}, err
@@ -264,7 +284,7 @@ func GetWeatherData(city string) (Weather, error) {
 	lat := geoResponse.Results[0].Latitude
 	long := geoResponse.Results[0].Longitude
 
-	response, err := http.Get(fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,weather_code,precipitation,relative_humidity_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&temperature_unit=celsius", lat, long))
+	response, err := httpClient.Get(fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,weather_code,precipitation,relative_humidity_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&temperature_unit=celsius", lat, long))
 	if err != nil {
 		return Weather{}, err
 	}
