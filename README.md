@@ -28,7 +28,14 @@ go build -o build/skogsnet_v2 ./internal
 
 ## Test
 ```sh
+# Run all tests
 go test ./internal
+
+# Run tests with coverage
+go test -coverprofile=coverage.out ./internal
+
+# View coverage report
+go tool cover -html=coverage.out
 ```
 
 ## Configuration
