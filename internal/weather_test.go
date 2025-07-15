@@ -298,7 +298,6 @@ func TestStartWeatherFetcher_InitialFetchRetry(t *testing.T) {
 func TestStartWeatherFetcher_Ticker_Success(t *testing.T) {
 	origGetWeatherData := GetWeatherData
 	origInsertWeather := insertWeather
-	origLogInfo := logInfo
 
 	GetWeatherData = func(city string) (Weather, error) {
 		return Weather{Name: city}, nil
@@ -306,16 +305,10 @@ func TestStartWeatherFetcher_Ticker_Success(t *testing.T) {
 	insertWeather = func(db *sql.DB, w Weather, ts int64) error {
 		return nil
 	}
-	logCalled := false
-	logInfo = func(format string, args ...interface{}) {
-		if strings.Contains(format, "Weather data updated successfully") {
-			logCalled = true
-		}
-	}
+
 	defer func() {
 		GetWeatherData = origGetWeatherData
 		insertWeather = origInsertWeather
-		logInfo = origLogInfo
 	}()
 
 	db, err := sql.Open("sqlite3", ":memory:")
@@ -340,8 +333,8 @@ func TestStartWeatherFetcher_Ticker_Success(t *testing.T) {
 	cancel()
 	wg.Wait()
 
-	if !logCalled {
-		t.Error("Expected logInfo to be called for successful ticker update")
+	if latestWeather.Name != city {
+		t.Errorf("Expected latest weather city to be %s, got %s", city, latestWeather.Name)
 	}
 }
 

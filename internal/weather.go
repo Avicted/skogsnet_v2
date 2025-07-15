@@ -120,8 +120,6 @@ weatherInit:
 					err := insertWeather(db, *latestWeather, *latestWeatherTimestamp)
 					if err != nil {
 						throttledLogError(&lastWeatherErr, "Failed to insert weather data: %v", err)
-					} else {
-						logInfo("Weather data updated successfully for city %s", city)
 					}
 				} else {
 					throttledLogError(&lastWeatherErr, "Failed to get weather data for city %s: %v", city, err)
