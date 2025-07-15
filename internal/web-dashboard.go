@@ -9,7 +9,9 @@ import (
 	"time"
 )
 
-func startDashboardServer(ctx context.Context, db *sql.DB, wg *sync.WaitGroup) {
+var startDashboardServer = startDashboardServerImpl
+
+func startDashboardServerImpl(ctx context.Context, db *sql.DB, wg *sync.WaitGroup) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

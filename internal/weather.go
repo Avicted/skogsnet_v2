@@ -14,6 +14,7 @@ import (
 
 var GetCityLatLong = getCityLatLongImpl
 var GetWeatherData = getWeatherDataImpl
+var startWeatherFetcher = startWeatherFetcherImpl
 
 var weatherTickerInterval = time.Minute
 var httpClient = http.DefaultClient
@@ -67,7 +68,7 @@ type Weather struct {
 	Name string `json:"name"`
 }
 
-func startWeatherFetcher(ctx context.Context, db *sql.DB, latestWeather *Weather, latestWeatherTimestamp *int64, wg *sync.WaitGroup) {
+func startWeatherFetcherImpl(ctx context.Context, db *sql.DB, latestWeather *Weather, latestWeatherTimestamp *int64, wg *sync.WaitGroup) {
 	city := *weatherCity
 	if city == "" {
 		logError("No city specified for weather data")

@@ -31,6 +31,8 @@ var (
 	weatherCity    = flag.String("city", "", "City name for weather data")
 )
 
+var mainLoop = mainLoopImpl
+
 func main() {
 	flag.Parse()
 	setupLogging()
@@ -52,6 +54,7 @@ func main() {
 	if err != nil {
 		logFatal("Could not initialize database: %v", err)
 		osExit(1)
+		return
 	}
 	defer db.Close()
 
@@ -72,7 +75,7 @@ func main() {
 	mainLoop(ctx, serialPort, db, &latestWeather, &wg)
 }
 
-func mainLoop(ctx context.Context, serialPort serial.Port, db *sql.DB, latestWeather *Weather, wg *sync.WaitGroup) {
+func mainLoopImpl(ctx context.Context, serialPort serial.Port, db *sql.DB, latestWeather *Weather, wg *sync.WaitGroup) {
 	scanner := bufio.NewScanner(serialPort)
 	for {
 		select {

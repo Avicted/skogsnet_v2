@@ -14,12 +14,13 @@ type Scanner interface {
 	Err() error
 }
 
+var initSerialPort = initSerialPortImpl
 var serialOpen = serial.Open
 var getSerialPort = getSerialPortImpl
 var readFromSerial = readFromSerialImpl
 var enumeratorGetDetailedPortsList = enumerator.GetDetailedPortsList
 
-func initSerialPort() serial.Port {
+func initSerialPortImpl() serial.Port {
 	logInfo("Initializing serial connection...")
 
 	portDetails, err := getSerialPort()

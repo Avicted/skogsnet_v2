@@ -272,3 +272,173 @@ func TestMainLoop_Success(t *testing.T) {
 		t.Error("Expected exportCSVAndExit to be called")
 	}
 } */
+
+func TestMain_ExportCSV(t *testing.T) {
+	origExportCSVAndExit := exportCSVAndExit
+	origSetupLogging := setupLogging
+	origExportCSV := *exportCSV
+
+	exportCSVAndExitCalled := false
+	exportCSVAndExit = func(dbFileName, exportCSV *string) {
+		exportCSVAndExitCalled = true
+	}
+	setupLogging = func() {}
+	*exportCSV = "out.csv"
+	defer func() {
+		exportCSVAndExit = origExportCSVAndExit
+		setupLogging = origSetupLogging
+		*exportCSV = origExportCSV
+	}()
+
+	main()
+	if !exportCSVAndExitCalled {
+		t.Error("Expected exportCSVAndExit to be called")
+	}
+}
+
+func TestMain_DBInitError(t *testing.T) {
+	origMustInitDatabase := mustInitDatabase
+	origSetupLogging := setupLogging
+	origLogFatal := logFatal
+	origOsExit := osExit
+	origInitSerialPort := initSerialPort
+
+	mustInitDatabase = func(dbFileName *string) (*sql.DB, error) {
+		return nil, errors.New("db error")
+	}
+	setupLogging = func() {}
+	logFatalCalled := false
+	logFatal = func(format string, args ...interface{}) { logFatalCalled = true }
+	osExitCalled := false
+	osExit = func(code int) { osExitCalled = true }
+	initSerialPort = func() serial.Port { return &mockSerialPort{} }
+
+	defer func() {
+		mustInitDatabase = origMustInitDatabase
+		setupLogging = origSetupLogging
+		logFatal = origLogFatal
+		osExit = origOsExit
+		initSerialPort = origInitSerialPort
+	}()
+
+	*exportCSV = ""
+	main()
+	if !logFatalCalled || !osExitCalled {
+		t.Error("Expected logFatal and osExit to be called on DB error")
+	}
+}
+
+func TestMain_WeatherFetcherEnabled(t *testing.T) {
+	origStartWeatherFetcher := startWeatherFetcher
+	origSetupLogging := setupLogging
+	origMustInitDatabase := mustInitDatabase
+	origInitSerialPort := initSerialPort
+	origEnableWALMode := enableWALMode
+	origMainLoop := mainLoop
+	origExportCSV := *exportCSV
+	origEnableWeather := *enableWeather
+
+	startWeatherFetcherCalled := false
+	startWeatherFetcher = func(ctx context.Context, db *sql.DB, latestWeather *Weather, latestWeatherTimestamp *int64, wg *sync.WaitGroup) {
+		startWeatherFetcherCalled = true
+	}
+	setupLogging = func() {}
+	mustInitDatabase = func(dbFileName *string) (*sql.DB, error) {
+		return sql.Open("sqlite3", ":memory:")
+	}
+	initSerialPort = func() serial.Port { return &mockSerialPort{} }
+	enableWALMode = func(db *sql.DB) {}
+	mainLoop = func(ctx context.Context, serialPort serial.Port, db *sql.DB, latestWeather *Weather, wg *sync.WaitGroup) {
+	}
+	*exportCSV = ""
+	*enableWeather = true
+	defer func() {
+		startWeatherFetcher = origStartWeatherFetcher
+		setupLogging = origSetupLogging
+		mustInitDatabase = origMustInitDatabase
+		initSerialPort = origInitSerialPort
+		enableWALMode = origEnableWALMode
+		mainLoop = origMainLoop
+		*exportCSV = origExportCSV
+		*enableWeather = origEnableWeather
+	}()
+
+	main()
+	if !startWeatherFetcherCalled {
+		t.Error("Expected startWeatherFetcher to be called when enabled")
+	}
+}
+
+func TestMain_DashboardEnabled(t *testing.T) {
+	origStartDashboardServer := startDashboardServer
+	origSetupLogging := setupLogging
+	origMustInitDatabase := mustInitDatabase
+	origInitSerialPort := initSerialPort
+	origEnableWALMode := enableWALMode
+	origMainLoop := mainLoop
+	origExportCSV := *exportCSV
+	origServeDashboard := *serveDashboard
+
+	startDashboardServerCalled := false
+	startDashboardServer = func(ctx context.Context, db *sql.DB, wg *sync.WaitGroup) {
+		startDashboardServerCalled = true
+	}
+	setupLogging = func() {}
+	mustInitDatabase = func(dbFileName *string) (*sql.DB, error) {
+		return sql.Open("sqlite3", ":memory:")
+	}
+	initSerialPort = func() serial.Port { return &mockSerialPort{} }
+	enableWALMode = func(db *sql.DB) {}
+	mainLoop = func(ctx context.Context, serialPort serial.Port, db *sql.DB, latestWeather *Weather, wg *sync.WaitGroup) {
+	}
+	*exportCSV = ""
+	*serveDashboard = true
+	defer func() {
+		startDashboardServer = origStartDashboardServer
+		setupLogging = origSetupLogging
+		mustInitDatabase = origMustInitDatabase
+		initSerialPort = origInitSerialPort
+		enableWALMode = origEnableWALMode
+		*exportCSV = origExportCSV
+		*serveDashboard = origServeDashboard
+		mainLoop = origMainLoop
+	}()
+
+	main()
+	if !startDashboardServerCalled {
+		t.Error("Expected startDashboardServer to be called when enabled")
+	}
+}
+func TestMain_MainLoopRuns(t *testing.T) {
+	origMainLoop := mainLoop
+	origSetupLogging := setupLogging
+	origMustInitDatabase := mustInitDatabase
+	origInitSerialPort := initSerialPort
+	origEnableWALMode := enableWALMode
+	origExportCSV := *exportCSV
+
+	mainLoopCalled := false
+	mainLoop = func(ctx context.Context, serialPort serial.Port, db *sql.DB, latestWeather *Weather, wg *sync.WaitGroup) {
+		mainLoopCalled = true
+	}
+	setupLogging = func() {}
+	mustInitDatabase = func(dbFileName *string) (*sql.DB, error) {
+		return sql.Open("sqlite3", ":memory:")
+	}
+	initSerialPort = func() serial.Port { return &mockSerialPort{} }
+	enableWALMode = func(db *sql.DB) {}
+	*exportCSV = ""
+	defer func() {
+		mainLoop = origMainLoop
+		setupLogging = origSetupLogging
+		mustInitDatabase = origMustInitDatabase
+		initSerialPort = origInitSerialPort
+		enableWALMode = origEnableWALMode
+		*exportCSV = origExportCSV
+	}()
+
+	main()
+	if !mainLoopCalled {
+		t.Error("Expected mainLoop to be called")
+	}
+}

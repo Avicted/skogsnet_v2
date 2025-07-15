@@ -11,6 +11,7 @@ import (
 )
 
 var mustInitDatabase = mustInitDatabaseImpl
+var enableWALMode = enableWALModeImpl
 var openDatabase = openDatabaseImpl
 var insertWeather = insertWeatherImpl
 var insertMeasurement = insertMeasurementImpl
@@ -26,7 +27,7 @@ func mustInitDatabaseImpl(dbFileName *string) (*sql.DB, error) {
 	return db, nil
 }
 
-func enableWALMode(db *sql.DB) {
+func enableWALModeImpl(db *sql.DB) {
 	if db == nil {
 		logError("Database connection is nil")
 		osExit(1)

@@ -22,31 +22,28 @@ func mockOpenDatabase(path string) (*sql.DB, error) {
 	return sql.Open("sqlite3", ":memory:")
 }
 
-func TestMustInitDatabase(t *testing.T) {
-	mustInitDatabase = mockMustInitDatabase
-	defer func() { mustInitDatabase = origMustInitDatabase }()
+func TestMustInitDatabaseImpl_ValidPath(t *testing.T) {
+	tmpDB := "test_real_mustinit.db"
+	defer os.Remove(tmpDB)
 
-	db, err := mustInitDatabase(nil)
+	db, err := mustInitDatabaseImpl(&tmpDB)
 	if err != nil {
-		t.Fatalf("Failed to initialize database: %v", err)
+		t.Fatalf("mustInitDatabaseImpl failed: %v", err)
 	}
 	if db == nil {
-		t.Fatal("Expected non-nil database connection, got nil")
+		t.Fatal("Expected non-nil DB from mustInitDatabaseImpl")
 	}
+	db.Close()
 }
 
-func TestMustInitDatabase_InvalidPath(t *testing.T) {
-	mustInitDatabase = mockMustInitDatabase
-	defer func() { mustInitDatabase = origMustInitDatabase }()
-
-	invalidPath := "invalid/test.db"
-	mustInitDatabase(&invalidPath)
-
-	if _, err := os.Stat(invalidPath); !os.IsNotExist(err) {
-		t.Fatalf("Expected database file %s to not exist, but it does", invalidPath)
+func TestMustInitDatabaseImpl_InvalidPath(t *testing.T) {
+	invalidPath := "/invalid/path/to/db.db"
+	db, err := mustInitDatabaseImpl(&invalidPath)
+	if err == nil {
+		t.Error("Expected error for invalid path, got nil")
 	}
-	if db, err := openDatabase(invalidPath); err == nil || db != nil {
-		t.Fatalf("Expected error when opening database with invalid path, got nil or non-nil db")
+	if db != nil {
+		t.Error("Expected nil DB for invalid path, got non-nil")
 	}
 }
 

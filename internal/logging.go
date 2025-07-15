@@ -18,12 +18,13 @@ var (
 	throttleInterval   = 5 * time.Second
 )
 
+var setupLogging = setupLoggingImpl
 var logInfo = logInfoImpl
 var logWarn = logWarnImpl
 var logError = logErrorImpl
 var logFatal = logFatalImpl
 
-func setupLogging() {
+func setupLoggingImpl() {
 	if *logFile != "" {
 		f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
