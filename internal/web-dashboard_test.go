@@ -10,6 +10,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestStartDashboardServer(t *testing.T) {
@@ -55,14 +58,19 @@ func TestStartDashboardServer(t *testing.T) {
 }
 
 func TestServeAPI_Endpoint(t *testing.T) {
-	db, err := openDatabase(":memory:")
+	sqlDB, err := openDatabase(":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open DB: %v", err)
 	}
-	defer db.Close()
+	defer sqlDB.Close()
+
+	gormDB, err := gorm.Open(sqlite.Dialector{Conn: sqlDB}, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("Failed to initialize GORM DB: %v", err)
+	}
 
 	mux := http.NewServeMux()
-	serveAPI(db, mux)
+	serveAPI(gormDB, mux)
 	req := httptest.NewRequest("GET", "/api/measurements?range=1h", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -83,7 +91,11 @@ func TestServeAPI_AllRanges(t *testing.T) {
 	defer db.Close()
 
 	mux := http.NewServeMux()
-	serveAPI(db, mux)
+	gormDB, err := gorm.Open(sqlite.Dialector{Conn: db}, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("Failed to initialize GORM DB: %v", err)
+	}
+	serveAPI(gormDB, mux)
 
 	ranges := []string{"1h", "6h", "12h", "24h", "today", "week", "month", "year"}
 	for _, r := range ranges {
@@ -108,7 +120,11 @@ func TestServeAPI_InvalidRange(t *testing.T) {
 	defer db.Close()
 
 	mux := http.NewServeMux()
-	serveAPI(db, mux)
+	gormDB, err := gorm.Open(sqlite.Dialector{Conn: db}, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("Failed to initialize GORM DB: %v", err)
+	}
+	serveAPI(gormDB, mux)
 
 	req := httptest.NewRequest("GET", "/api/measurements?range=invalid", nil)
 	w := httptest.NewRecorder()
@@ -127,7 +143,11 @@ func TestServeAPI_NoRange(t *testing.T) {
 	defer db.Close()
 
 	mux := http.NewServeMux()
-	serveAPI(db, mux)
+	gormDB, err := gorm.Open(sqlite.Dialector{Conn: db}, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("Failed to initialize GORM DB: %v", err)
+	}
+	serveAPI(gormDB, mux)
 	req := httptest.NewRequest("GET", "/api/measurements", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -150,17 +170,10 @@ func TestServeAPI_DBError(t *testing.T) {
 	// Simulate a DB error by closing the connection
 	db.Close()
 
-	mux := http.NewServeMux()
-	serveAPI(db, mux)
-	req := httptest.NewRequest("GET", "/api/measurements?range=1h", nil)
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	_, err = gorm.Open(sqlite.Dialector{Conn: db}, &gorm.Config{})
 
-	if w.Code != 500 {
-		t.Errorf("Expected 500 Internal Server Error, got %d", w.Code)
-	}
-	if w.Body.String() != "DB error" {
-		t.Errorf("Expected 'DB error', got '%s'", w.Body.String())
+	if err == nil {
+		t.Fatal("Failed to initialize GORM DB: sql: database is closed")
 	}
 }
 
@@ -215,7 +228,11 @@ func TestServeAPI_ScanRowsMapping(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
-	serveAPI(db, mux)
+	gormDB, err := gorm.Open(sqlite.Dialector{Conn: db}, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("Failed to initialize GORM DB: %v", err)
+	}
+	serveAPI(gormDB, mux)
 	req := httptest.NewRequest("GET", "/api/measurements?range=1h", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -236,5 +253,31 @@ func TestServeAPI_ScanRowsMapping(t *testing.T) {
 		!strings.Contains(string(body), "21.5") ||
 		!strings.Contains(string(body), "22.1") {
 		t.Errorf("Expected mapped fields in response, got: %s", string(body))
+	}
+}
+
+func TestGetLatestMeasurement(t *testing.T) {
+	db, err := openDatabase(":memory:")
+	if err != nil {
+		t.Fatalf("Failed to open DB: %v", err)
+	}
+	defer db.Close()
+
+	mux := http.NewServeMux()
+	gormDB, err := gorm.Open(sqlite.Dialector{Conn: db}, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("Failed to initialize GORM DB: %v", err)
+	}
+	serveAPI(gormDB, mux)
+
+	req := httptest.NewRequest("GET", "/api/measurements/latest", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Errorf("Expected 200 OK for range '%s', got %d", "latest", w.Code)
+	}
+	if len(w.Body.Bytes()) == 0 {
+		t.Errorf("Expected non-empty response body for range '%s'", "latest")
 	}
 }

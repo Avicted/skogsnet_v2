@@ -11,12 +11,16 @@ Skogsnet v2 is a Go application for reading temperature and humidity measurement
 - **Graceful Shutdown:** Handles Ctrl+C or SIGTERM cleanly
 - **CSV Export:** Export all measurements to a CSV file with a single flag
 - **Configurable Logging:** Log to a file with log levels (info, warn, error)
-- **Web Dashboard:** Visualize measurements interactively with time range selection, dual axes, dark mode, and live updates
+- **Web Dashboard:** Visualize measurements with an interactive chart and time range selection
 - **Weather Data Integration:** Fetches current weather data from OpenMeteo API and displays it alongside measurements
 
 ## Requirements
 
 - Go 1.18 or newer
+- Serial device providing JSON-formatted temperature and humidity data
+
+- Optional:
+  - Node.js and npm (for building the web dashboard)
 
 
 ## Build
@@ -95,16 +99,22 @@ Measurement at 2025-07-14 16:50:08
 ## Web Dashboard
 
 - **Features:**  
-  - Interactive chart with dual axes (°C and %)
+  - Interactive chart
   - Time range selection: 1h, 6h, 12h, 24h, today, week, month, year, all
   - Live data updates (toggleable)
-  - Responsive dark mode design
-  - 24h time labels
+  - Responsive design
 
-- **Access:**  
+- **Build**
+  ```sh
+  cd skogsnet-frontend
+  npm install
+  npm run build
+  ```
+
+- **Access:**
   Start with `-dashboard` and open [http://localhost:8080](http://localhost:8080)
 
-![web-dashboard](web-dashboard-static/web-dashboard-screenshot.png)
+![web-dashboard](skogsnet-frontend/react-frontend-screenshot.png)
 
 
 ## License

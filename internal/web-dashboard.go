@@ -4,10 +4,28 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"sync"
 	"time"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
+
+type Result struct {
+	AggregatedTimestamp int64
+	AvgTemperature      float64
+	AvgHumidity         float64
+	City                string
+	AvgWeatherTemp      float64
+	AvgWeatherHumidity  float64
+	AvgWindSpeed        float64
+	AvgWindDeg          float64
+	AvgClouds           float64
+	AvgWeatherCode      float64
+	Description         string
+}
 
 var startDashboardServer = startDashboardServerImpl
 
@@ -16,8 +34,17 @@ func startDashboardServerImpl(ctx context.Context, db *sql.DB, wg *sync.WaitGrou
 	go func() {
 		defer wg.Done()
 		mux := http.NewServeMux()
-		serveAPI(db, mux)
-		mux.Handle("/", http.FileServer(http.Dir("web-dashboard-static")))
+
+		var stdDB *sql.DB = db
+		gormDB, err := gorm.Open(sqlite.New(sqlite.Config{
+			Conn: stdDB, // reuse existing connection
+		}), &gorm.Config{})
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		serveAPI(gormDB, mux)
+		mux.Handle("/", http.FileServer(http.Dir("skogsnet-frontend/dist")))
 		server := &http.Server{Addr: ":8080", Handler: mux}
 		logInfo("Web dashboard served at http://localhost:8080")
 		go func() {
@@ -31,11 +58,43 @@ func startDashboardServerImpl(ctx context.Context, db *sql.DB, wg *sync.WaitGrou
 	}()
 }
 
-func serveAPI(db *sql.DB, mux *http.ServeMux) {
+func serveAPI(db *gorm.DB, mux *http.ServeMux) {
+	mux.HandleFunc("/api/measurements/latest", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+
+		var result Result
+		err := db.Model(&Measurement{}).
+			Select(`measurements.timestamp AS aggregated_timestamp,
+                measurements.temperature AS avg_temperature,
+                measurements.humidity AS avg_humidity,
+                weather.city AS city,
+                weather.temp AS avg_weather_temp,
+                weather.humidity AS avg_weather_humidity,
+                weather.wind_speed AS avg_wind_speed,
+                weather.wind_deg AS avg_wind_deg,
+                weather.clouds AS avg_clouds,
+                weather.weather_code AS avg_weather_code,
+                weather.description AS description`).
+			Joins("LEFT JOIN weather ON measurements.weather_id = weather.id").
+			Order("measurements.timestamp DESC").
+			Limit(1).
+			Scan(&result).Error
+		if err != nil {
+			http.Error(w, "DB query error", 500)
+			logError("DB query error: %v", err)
+			return
+		}
+		json.NewEncoder(w).Encode([]Result{result})
+	})
+
 	mux.HandleFunc("/api/measurements", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+
 		rangeParam := r.URL.Query().Get("range")
-		var since int64
 		now := time.Now()
+		var since int64
 
 		switch rangeParam {
 		case "1h":
@@ -55,67 +114,81 @@ func serveAPI(db *sql.DB, mux *http.ServeMux) {
 		case "year":
 			since = now.AddDate(-1, 0, 0).UnixMilli()
 		default:
-			since = 0 // all data
+			since = 0
 		}
 
-		rows, err := db.Query(`
-			SELECT m.timestamp, m.temperature, m.humidity,
-				w.city, w.temp, w.humidity, w.wind_speed, w.wind_deg, w.clouds, w.weather_code, w.description,
-				w.timestamp as weather_ts
-			FROM measurements m
-			LEFT JOIN weather w ON m.weather_id = w.id
-			WHERE m.timestamp >= ?
-			ORDER BY m.timestamp
-		`, since)
-
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("DB error"))
-			return
-		}
-		defer rows.Close()
-
-		type Combined struct {
-			Timestamp       int64   `json:"timestamp"`
-			Temperature     float64 `json:"temperature"`
-			Humidity        float64 `json:"humidity"`
-			City            string  `json:"city"`
-			WeatherTemp     float64 `json:"weather_temp"`
-			WeatherHumidity int64   `json:"weather_humidity"`
-			WindSpeed       float64 `json:"wind_speed"`
-			WindDeg         int64   `json:"wind_deg"`
-			Clouds          int64   `json:"clouds"`
-			WeatherCode     int64   `json:"weather_code"`
-			Description     string  `json:"weather_description"`
+		// Set interval
+		var intervalSeconds int
+		switch rangeParam {
+		case "1h":
+			intervalSeconds = 60
+		case "6h":
+			intervalSeconds = 60
+		case "12h", "24h", "today":
+			intervalSeconds = 60
+		case "week":
+			intervalSeconds = 3600
+		case "month", "year":
+			intervalSeconds = 86400
+		default:
+			intervalSeconds = 86400
 		}
 
-		var data []Combined
-		for rows.Next() {
-			var c Combined
-			var city, description sql.NullString
-			var weatherTemp sql.NullFloat64
-			var weatherHumidity, windDeg, clouds, weatherCode, weatherTs sql.NullInt64
-			var windSpeed sql.NullFloat64
+		end := now.UnixMilli()
 
-			if err := rows.Scan(
-				&c.Timestamp, &c.Temperature, &c.Humidity,
-				&city, &weatherTemp, &weatherHumidity, &windSpeed, &windDeg, &clouds, &weatherCode, &description,
-				&weatherTs,
-			); err == nil {
-				c.City = city.String
-				c.WeatherTemp = weatherTemp.Float64
-				c.WeatherHumidity = weatherHumidity.Int64
-				c.WindSpeed = windSpeed.Float64
-				c.WindDeg = windDeg.Int64
-				c.Clouds = clouds.Int64
-				c.WeatherCode = weatherCode.Int64
-				c.Description = description.String
+		var results []Result
 
-				data = append(data, c)
+		if rangeParam == "week" || rangeParam == "month" || rangeParam == "year" {
+			// Daily bucket
+			err := db.Model(&Measurement{}).
+				Select(`CAST((measurements.timestamp / 1000) / 86400 AS INTEGER) * 86400 * 1000 AS aggregated_timestamp,
+                AVG(measurements.temperature) AS avg_temperature,
+                AVG(measurements.humidity) AS avg_humidity,
+                MAX(weather.city) AS city,
+                AVG(weather.temp) AS avg_weather_temp,
+                AVG(weather.humidity) AS avg_weather_humidity,
+                AVG(weather.wind_speed) AS avg_wind_speed,
+                AVG(weather.wind_deg) AS avg_wind_deg,
+                AVG(weather.clouds) AS avg_clouds,
+                AVG(weather.weather_code) AS avg_weather_code,
+                MAX(weather.description) AS description`).
+				Joins("LEFT JOIN weather ON measurements.weather_id = weather.id").
+				Where("measurements.timestamp >= ? AND measurements.timestamp <= ?", since, end).
+				Group("aggregated_timestamp").
+				Having("COUNT(temperature) > 0").
+				Scan(&results).Error
+			if err != nil {
+				http.Error(w, "DB query error", 500)
+				logError("DB query error: %v", err)
+				return
+			}
+		} else {
+			// Flexible bucket using intervalSeconds
+			err := db.Model(&Measurement{}).
+				Select(`(strftime('%s', datetime(measurements.timestamp / 1000, 'unixepoch')) / ? ) * ? * 1000 AS aggregated_timestamp,
+                AVG(measurements.temperature) AS avg_temperature,
+                AVG(measurements.humidity) AS avg_humidity,
+                MAX(weather.city) AS city,
+                AVG(weather.temp) AS avg_weather_temp,
+                AVG(weather.humidity) AS avg_weather_humidity,
+                AVG(weather.wind_speed) AS avg_wind_speed,
+                AVG(weather.wind_deg) AS avg_wind_deg,
+                AVG(weather.clouds) AS avg_clouds,
+                AVG(weather.weather_code) AS avg_weather_code,
+                MAX(weather.description) AS description`, intervalSeconds, intervalSeconds).
+				Joins("LEFT JOIN weather ON measurements.weather_id = weather.id").
+				Where("measurements.timestamp >= ? AND measurements.timestamp <= ?", since, end).
+				Group("aggregated_timestamp").
+				Having("COUNT(temperature) > 0").
+				Scan(&results).Error
+			if err != nil {
+				http.Error(w, "DB query error", 500)
+				logError("DB query error: %v", err)
+				return
 			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(data)
+		json.NewEncoder(w).Encode(results)
 	})
 }
