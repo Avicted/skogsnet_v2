@@ -176,7 +176,7 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ darkMode, measurements, chartCo
     };
 
     return (
-        <div className="w-full h-full min-h-[800px] sm:min-h-[400px] mt-4 mb-4">
+        <div className="w-full h-full min-h-[800px] sm:min-h-[400px] mt-4 mb-4 pl-4 pr-4">
             <Chart
                 options={chartOptions}
                 series={chartOptions.series}

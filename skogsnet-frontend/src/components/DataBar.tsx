@@ -20,10 +20,10 @@ export default function DataBar({
                 Temp: {currentTemp.toFixed(2)} °C
             </Badge>
             <Badge size="md" className="w-full sm:w-auto">
-                Humidity: {currentHumidity.toFixed(2)} %
+                Outside Temp: {currentOutsideTemp.toFixed(2)} °C
             </Badge>
             <Badge size="md" className="w-full sm:w-auto">
-                Outside Temp: {currentOutsideTemp.toFixed(2)} °C
+                Humidity: {currentHumidity.toFixed(2)} %
             </Badge>
             <Badge size="md" className="w-full sm:w-auto">
                 Wind Speed: {latestMeasurement ? latestMeasurement.AvgWindSpeed.toFixed(2) : 0} m/s
