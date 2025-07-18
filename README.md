@@ -11,7 +11,7 @@ Skogsnet v2 is a Go application for reading temperature and humidity measurement
 - **Graceful Shutdown:** Handles Ctrl+C or SIGTERM cleanly
 - **CSV Export:** Export all measurements to a CSV file with a single flag
 - **Configurable Logging:** Log to a file with log levels (info, warn, error)
-- **Web Dashboard:** Visualize measurements with an interactive chart and time range selection
+- **Web Dashboard:** Visualize measurements with an interactive chart and time range selection with dark mode support
 - **Weather Data Integration:** Fetches current weather data from OpenMeteo API and displays it alongside measurements
 - **Docker Support:** Easily deploy with Docker and Docker Compose
 
@@ -104,6 +104,7 @@ Measurement at 2025-07-14 16:50:08
   - Time range selection: 1h, 6h, 12h, 24h, today, week, month, year, all
   - Live data updates (toggleable)
   - Responsive design
+  - Dark mode support
 
 - **Build**
   ```sh

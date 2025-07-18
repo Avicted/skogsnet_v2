@@ -3,12 +3,21 @@ import Chart from "react-apexcharts";
 import type { Measurement } from "../interfaces/Measurement";
 
 interface ChartPanelProps {
+    darkMode: boolean;
     measurements: Measurement[];
     showDataRange: string;
     chartColors: string[];
 }
 
-const ChartPanel: React.FC<ChartPanelProps> = ({ measurements, chartColors }) => {
+const ChartPanel: React.FC<ChartPanelProps> = ({ darkMode, measurements, chartColors }) => {
+    React.useEffect(() => {
+        if (darkMode) {
+            document.documentElement.classList.add("dark");
+        } else {
+            document.documentElement.classList.remove("dark");
+        }
+    }, [darkMode]);
+
     if (!measurements || measurements.length === 0) {
         return (
             <div className="flex items-center justify-center h-full text-gray-500 text-lg">
@@ -25,6 +34,10 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ measurements, chartColors }) =>
             animations: {
                 enabled: true,
             },
+            background: darkMode ? "#18181b" : "#fff",
+        },
+        theme: {
+            mode: darkMode ? "dark" : "light",
         },
         series: [
             {
@@ -50,11 +63,24 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ measurements, chartColors }) =>
             position: "bottom",
             horizontalAlign: "center",
             floating: false,
-            fontSize: "12px",
+            fontSize: "14px",
             fontFamily: "Space Grotesk",
             itemMargin: {
                 horizontal: 16,
-                vertical: 4,
+                vertical: 8,
+            },
+        },
+        grid: {
+            borderColor: darkMode ? "#27272a" : "#e5e7eb", // darker for dark mode, lighter for light mode
+            xaxis: {
+                lines: {
+                    show: true,
+                },
+            },
+            yaxis: {
+                lines: {
+                    show: true,
+                },
             },
         },
         colors: chartColors,
@@ -76,12 +102,13 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ measurements, chartColors }) =>
             }
         },
         title: {
-            text: "Temperature and Humidity Over Time",
+            text: "Weather Data Over Time",
             align: "center",
             style: {
-                fontSize: "12px",
+                fontSize: "16px",
                 fontFamily: "Space Grotesk",
-                color: "#333",
+                color: darkMode ? "#e5e7eb" : "#333",
+
             },
         },
         tooltip: {
@@ -149,13 +176,15 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ measurements, chartColors }) =>
     };
 
     return (
-        <Chart
-            options={chartOptions}
-            series={chartOptions.series}
-            width="100%"
-            height="100%"
-            type="line"
-        />
+        <div className="w-full h-full min-h-[800px] sm:min-h-[400px]">
+            <Chart
+                options={chartOptions}
+                series={chartOptions.series}
+                width="100%"
+                height="100%"
+                type="line"
+            />
+        </div>
     );
 };
 
