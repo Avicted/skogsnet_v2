@@ -13,10 +13,11 @@ Skogsnet v2 is a Go application for reading temperature and humidity measurement
 - **Configurable Logging:** Log to a file with log levels (info, warn, error)
 - **Web Dashboard:** Visualize measurements with an interactive chart and time range selection
 - **Weather Data Integration:** Fetches current weather data from OpenMeteo API and displays it alongside measurements
+- **Docker Support:** Easily deploy with Docker and Docker Compose
 
 ## Requirements
 
-- Go 1.18 or newer
+- Go 1.24.5 or newer
 - Serial device providing JSON-formatted temperature and humidity data
 
 - Optional:
@@ -115,6 +116,53 @@ Measurement at 2025-07-14 16:50:08
   Start with `-dashboard` and open [http://localhost:8080](http://localhost:8080)
 
 ![web-dashboard](skogsnet-frontend/react-frontend-screenshot.png)
+
+
+## Docker Support
+Please make your desired changes to the `docker-compose.yml` file to set the environment variables and serial port.
+
+
+Build and Run with Docker Compose:
+```sh
+docker compose up --build
+```
+
+### Host Directory for Database and Log Files
+If you want the database and log files to exist in a host directory, you can create a `data` directory in the same location as the `docker-compose.yml` file and mount it as a volume:
+
+Create the `data` directory and files + set permissions:
+```sh
+mkdir -p ./data
+touch ./data/measurements-docker.db
+touch ./data/skogsnet-docker.log
+chmod 666 ./data/measurements-docker.db ./data/skogsnet-docker.log
+```
+
+In `docker-compose.yml` add the volumes mount:
+```yaml
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    devices:
+      - "/dev/ttyACM0:/dev/ttyACM0"            # Assign to your serial port
+    environment:                               # Options for the program
+      BAUD: "9600"
+      CITY: "Helsinki"
+      DASHBOARD: "true"
+      DB: "measurements-docker.db"
+      EXPORT_CSV: ""
+      LOG_FILE: "skogsnet-docker.log"
+      PORT: "/dev/ttyACM0"
+      WEATHER: "true"
+    ports:
+      - "8080:8080"
+    volumes:                                    # Store the database and log outside the container
+      - ./data/measurements-docker.db:/app/measurements-docker.db
+      - ./data/skogsnet-docker.log:/app/skogsnet-docker.log
+    restart: unless-stopped
+```
 
 
 ## License

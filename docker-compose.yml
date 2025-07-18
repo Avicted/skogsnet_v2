@@ -1,0 +1,19 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    devices:
+      - "/dev/ttyACM0:/dev/ttyACM0"            # Assign to your serial port
+    environment:                               # Options for the program
+      BAUD: "9600"
+      CITY: "Helsinki"
+      DASHBOARD: "true"
+      DB: "measurements-docker.db"
+      EXPORT_CSV: ""
+      LOG_FILE: "skogsnet-docker.log"
+      PORT: "/dev/ttyACM0"
+      WEATHER: "true"
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
