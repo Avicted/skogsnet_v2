@@ -34,7 +34,7 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ darkMode, measurements, chartCo
             animations: {
                 enabled: true,
             },
-            background: darkMode ? "#1b1a19ff" : "#fff",
+            background: darkMode ? "#121212" : "#fff",
         },
         theme: {
             mode: darkMode ? "dark" : "light",
@@ -107,7 +107,7 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ darkMode, measurements, chartCo
             style: {
                 fontSize: "16px",
                 fontFamily: "Space Grotesk",
-                color: darkMode ? "#e5e7eb" : "#333",
+                color: darkMode ? "#e5e7eb" : "#121212",
 
             },
         },
@@ -176,7 +176,7 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ darkMode, measurements, chartCo
     };
 
     return (
-        <div className="w-full h-full min-h-[800px] sm:min-h-[400px] mt-4">
+        <div className="w-full h-full min-h-[800px] sm:min-h-[400px] mt-4 mb-4">
             <Chart
                 options={chartOptions}
                 series={chartOptions.series}
