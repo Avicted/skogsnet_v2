@@ -1,7 +1,7 @@
 import './App.css'
 import { useCallback, useEffect, useState, useRef } from 'react';
 import ChartPanel from './components/ChartPanel';
-import type { Measurement } from './interfaces/Measurement';
+import type { LatestMeasurementResponse, Measurement } from './interfaces/Measurement';
 import TopBar from "./components/TopBar";
 import TimeRangeSelection from "./components/TimeRangeSelection";
 import DataBar from "./components/DataBar";
@@ -14,7 +14,7 @@ function App() {
   const [liveDataChecked, setLiveDataChecked] = useState<boolean>(true);
   const [showDataRange, setShowDataRange] = useState<string>('today');
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
-  const [latestMeasurement, setLatestMeasurement] = useState<Measurement | null>(null);
+  const [latestMeasurement, setLatestMeasurement] = useState<LatestMeasurementResponse | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchInterval = 10000;
@@ -44,12 +44,11 @@ function App() {
         if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
 
-        if (Array.isArray(data)) {
-          if (latest && data.length > 0) {
-            setLatestMeasurement(data[0]);
-          } else if (!latest) {
-            setMeasurements(data);
-          }
+        if (latest) {
+          setLatestMeasurement(data);
+          return data;
+        } else if (Array.isArray(data)) {
+          setMeasurements(data);
           return data;
         } else {
           throw new Error('Invalid data format');
@@ -62,10 +61,6 @@ function App() {
     },
     [showDataRange]
   );
-
-  const currentTemp = latestMeasurement ? latestMeasurement.AvgTemperature : 0;
-  const currentHumidity = latestMeasurement ? latestMeasurement.AvgHumidity : 0;
-  const currentOutsideTemp = latestMeasurement ? (latestMeasurement.AvgWeatherTemp !== 0 ? latestMeasurement.AvgWeatherTemp : 0) : 0;
 
   const chartColors = ["#ef4444", "#ffae00ff", "#3b82f6", "#ff00ff"]
 
@@ -115,12 +110,7 @@ function App() {
         TimeRangeSelection={TimeRangeSelection}
       />
 
-      <DataBar
-        latestMeasurement={latestMeasurement}
-        currentTemp={currentTemp}
-        currentHumidity={currentHumidity}
-        currentOutsideTemp={currentOutsideTemp}
-      />
+      <DataBar data={latestMeasurement} />
 
       <ChartPanel
         darkMode={darkMode}

@@ -63,29 +63,44 @@ func serveAPI(db *gorm.DB, mux *http.ServeMux) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
 
-		var result Result
+		derivativeLastMeasurementCount := 10
+
+		var results []Result
 		err := db.Model(&Measurement{}).
 			Select(`measurements.timestamp AS aggregated_timestamp,
-                measurements.temperature AS avg_temperature,
-                measurements.humidity AS avg_humidity,
-                weather.city AS city,
-                weather.temp AS avg_weather_temp,
-                weather.humidity AS avg_weather_humidity,
-                weather.wind_speed AS avg_wind_speed,
-                weather.wind_deg AS avg_wind_deg,
-                weather.clouds AS avg_clouds,
-                weather.weather_code AS avg_weather_code,
-                weather.description AS description`).
+            measurements.temperature AS avg_temperature,
+            measurements.humidity AS avg_humidity,
+            weather.city AS city,
+            weather.temp AS avg_weather_temp,
+            weather.humidity AS avg_weather_humidity,
+            weather.wind_speed AS avg_wind_speed,
+            weather.wind_deg AS avg_wind_deg,
+            weather.clouds AS avg_clouds,
+            weather.weather_code AS avg_weather_code,
+            weather.description AS description`).
 			Joins("LEFT JOIN weather ON measurements.weather_id = weather.id").
 			Order("measurements.timestamp DESC").
-			Limit(1).
-			Scan(&result).Error
-		if err != nil {
+			Limit(derivativeLastMeasurementCount).
+			Scan(&results).Error
+		if err != nil || len(results) == 0 {
 			http.Error(w, "DB query error", 500)
 			logError("DB query error: %v", err)
 			return
 		}
-		json.NewEncoder(w).Encode([]Result{result})
+
+		// Calculate trajectory (delta over last lastMeasurementCount measurements)
+		var tempTrajectory *float64
+		if len(results) >= 2 {
+			diff := results[0].AvgTemperature - results[len(results)-1].AvgTemperature
+			tempTrajectory = &diff
+		}
+
+		response := map[string]any{
+			"latest":     results[0],
+			"trajectory": tempTrajectory,
+		}
+
+		json.NewEncoder(w).Encode(response)
 	})
 
 	mux.HandleFunc("/api/measurements", func(w http.ResponseWriter, r *http.Request) {

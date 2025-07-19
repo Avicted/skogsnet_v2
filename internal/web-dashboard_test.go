@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -263,6 +264,59 @@ func TestGetLatestMeasurement(t *testing.T) {
 	}
 	defer db.Close()
 
+	// Setup tables
+	_, err = db.Exec(`
+        CREATE TABLE IF NOT EXISTS measurements (
+            timestamp INTEGER,
+            temperature REAL,
+            humidity INTEGER,
+            weather_id INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS weather (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            city TEXT,
+            temp REAL,
+            humidity INTEGER,
+            wind_speed REAL,
+            wind_deg INTEGER,
+            clouds INTEGER,
+            weather_code INTEGER,
+            description TEXT,
+            timestamp INTEGER
+        );
+    `)
+	if err != nil {
+		t.Fatalf("Failed to setup tables: %v", err)
+	}
+
+	// Insert a weather row
+	now := time.Now().UnixMilli()
+	res, err := db.Exec(`
+        INSERT INTO weather (city, temp, humidity, wind_speed, wind_deg, clouds, weather_code, description, timestamp)
+        VALUES ('Helsinki', 22.1, 60, 5.5, 180, 75, 800, 'clear sky', ?)`, now)
+	if err != nil {
+		t.Fatalf("Failed to insert weather: %v", err)
+	}
+	weatherID, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("Failed to get weather id: %v", err)
+	}
+
+	// Insert 10 measurements with increasing temperature
+	for i := 0; i < 10; i++ {
+		_, err = db.Exec(`
+            INSERT INTO measurements (timestamp, temperature, humidity, weather_id)
+            VALUES (?, ?, ?, ?)`,
+			now-int64((9-i)*60000), // 1 minute apart, oldest first
+			20.0+float64(i),        // temperature: 20.0, 21.0, ..., 29.0
+			50+i,
+			weatherID,
+		)
+		if err != nil {
+			t.Fatalf("Failed to insert measurement %d: %v", i, err)
+		}
+	}
+
 	mux := http.NewServeMux()
 	gormDB, err := gorm.Open(sqlite.Dialector{Conn: db}, &gorm.Config{})
 	if err != nil {
@@ -275,9 +329,27 @@ func TestGetLatestMeasurement(t *testing.T) {
 	mux.ServeHTTP(w, req)
 
 	if w.Code != 200 {
-		t.Errorf("Expected 200 OK for range '%s', got %d", "latest", w.Code)
+		t.Errorf("Expected 200 OK, got %d", w.Code)
 	}
-	if len(w.Body.Bytes()) == 0 {
-		t.Errorf("Expected non-empty response body for range '%s'", "latest")
+	body := w.Body.Bytes()
+	if len(body) == 0 {
+		t.Error("Expected non-empty response body for latest measurement")
+	}
+
+	// Parse response and check trajectory
+	var resp struct {
+		Latest     map[string]any `json:"latest"`
+		Trajectory float64        `json:"trajectory"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	// The trajectory should be 29.0 - 20.0 = 9.0
+	if resp.Trajectory != 9.0 {
+		t.Errorf("Expected trajectory 9.0, got %v", resp.Trajectory)
+	}
+	if resp.Latest == nil {
+		t.Error("Expected latest measurement in response")
 	}
 }

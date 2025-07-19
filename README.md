@@ -102,6 +102,12 @@ Measurement at 2025-07-14 16:50:08
 - **Features:**  
   - Interactive chart
   - Time range selection: 1h, 6h, 12h, 24h, today, week, month, year, all
+  - Data:
+    - Temperature (Sensor and outside)
+    - Humidity (Sensor and outside)
+    - Wind speed
+    - Weather description
+    - Delta temperature (trajectory)
   - Live data updates (toggleable)
   - Responsive design
   - Dark mode support

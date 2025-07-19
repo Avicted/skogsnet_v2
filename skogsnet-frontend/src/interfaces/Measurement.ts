@@ -11,3 +11,9 @@ export interface Measurement {
     AvgWeatherCode: number
     Description: string
 }
+
+
+export interface LatestMeasurementResponse {
+    latest: Measurement
+    trajectory: number,
+}
