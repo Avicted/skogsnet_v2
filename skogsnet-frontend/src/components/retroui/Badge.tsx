@@ -2,13 +2,16 @@ import { cn } from "../../lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 import { type HTMLAttributes } from "react";
 
+const backgroundColorDark = "#557188";
+const backgroundColorLight = "#FF0000";
+
 const badgeVariants = cva("font-semibold", {
   variants: {
     variant: {
-      default: "bg-gray-200 text-gray-700 dark:bg-zinc-800 dark:text-gray-200",
-      outline: "outline-2 outline-foreground text-foreground dark:outline-gray-200 dark:text-gray-200",
-      solid: "bg-foreground text-background dark:bg-gray-200 dark:text-zinc-900",
-      surface: "outline-2 bg-primary text-black dark:bg-zinc-700 dark:text-gray-100",
+      default: `bg-[${backgroundColorLight}] text-gray-700 dark:bg-[${backgroundColorDark}] dark:text-gray-200`,
+      outline: `outline-2 outline-foreground text-foreground dark:outline-[${backgroundColorDark}] dark:text-gray-200`,
+      solid: `bg-[${backgroundColorLight}] text-background dark:bg-[${backgroundColorDark}] dark:text-zinc-900`,
+      surface: `outline-2 bg-primary text-black dark:bg-[${backgroundColorDark}] dark:text-gray-100`,
     },
     size: {
       sm: "px-2 py-1 text-xs font-medium",

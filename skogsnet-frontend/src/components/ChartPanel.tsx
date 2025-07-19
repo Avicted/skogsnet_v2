@@ -34,7 +34,7 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ darkMode, measurements, chartCo
             animations: {
                 enabled: true,
             },
-            background: darkMode ? "#121212" : "#fff",
+            background: darkMode ? "#0c1114" : "#fff",
         },
         theme: {
             mode: darkMode ? "dark" : "light",
@@ -105,9 +105,10 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ darkMode, measurements, chartCo
             text: "Weather Data Over Time",
             align: "center",
             style: {
-                fontSize: "16px",
+                fontSize: "14px",
                 fontFamily: "Space Grotesk",
-                color: darkMode ? "#e5e7eb" : "#121212",
+                fontWeight: "medium",
+                color: darkMode ? "#c2c4caff" : "#757575ff",
 
             },
         },
@@ -130,6 +131,10 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ darkMode, measurements, chartCo
                     return `${value}`;
                 },
             },
+            style: {
+                fontSize: "12px",
+                fontFamily: "Space Grotesk",
+            }
         },
         yaxis: [
             {
@@ -176,7 +181,7 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ darkMode, measurements, chartCo
     };
 
     return (
-        <div className="w-full h-full min-h-[800px] sm:min-h-[400px] mt-4 mb-4 pl-4 pr-4">
+        <div className="w-full h-full min-h-[800px] sm:min-h-[400px] mt-4 mb-4 pl-4 pr-6">
             <Chart
                 options={chartOptions}
                 series={chartOptions.series}

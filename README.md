@@ -107,7 +107,7 @@ Measurement at 2025-07-14 16:50:08
     - Humidity (Sensor and outside)
     - Wind speed
     - Weather description
-    - Delta temperature (trajectory)
+    - Sensor temperature derivative trajectory
   - Live data updates (toggleable)
   - Responsive design
   - Dark mode support

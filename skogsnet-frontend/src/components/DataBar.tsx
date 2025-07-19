@@ -3,10 +3,12 @@ import type { LatestMeasurementResponse } from "../interfaces/Measurement";
 
 interface DataBarProps {
     data: LatestMeasurementResponse | null;
+    darkMode?: boolean;
 }
 
 export default function DataBar({
     data,
+    darkMode,
 }: DataBarProps) {
     if (data == null || data.latest == null) {
         return (
@@ -17,6 +19,7 @@ export default function DataBar({
             </div>
         )
     }
+
     else {
         return (
             <div id="data-bar" className="flex flex-wrap items-center gap-4 ml-6 mr-6">
@@ -37,8 +40,7 @@ export default function DataBar({
                 </Badge>
                 <Badge size="md" className="w-full sm:w-auto">
                     <span
-                        className={`${(data.trajectory ?? 0) > 0 ? "text-red-500" : (data.trajectory ?? 0) < 0 ? "text-green-500" : "text-white"
-                            }`}
+                        className={`${(data.trajectory ?? 0) > 0 ? "text-red-500" : (data.trajectory ?? 0) < 0 ? "text-green-500" : (darkMode ? "text-gray-200" : "text-gray-700")}`}
                     >
                         Δ Temp: {(data.trajectory ?? 0).toFixed(2)} °C
                     </span>

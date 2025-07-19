@@ -24,7 +24,7 @@ const TopBar: FC<TopBarProps> = ({
     fetchError,
     TimeRangeSelection,
 }) => (
-    <div id="top-bar" className="flex flex-col p-6">
+    <div id="top-bar" className="flex flex-col p-6 pl-8 pr-8">
         {/* Desktop */}
         <div className="hidden sm:flex flex-row items-center w-full gap-4">
             <Text as="h4" className="w-auto">Skogsnet</Text>

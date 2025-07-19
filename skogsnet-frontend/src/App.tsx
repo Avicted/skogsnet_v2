@@ -110,7 +110,10 @@ function App() {
         TimeRangeSelection={TimeRangeSelection}
       />
 
-      <DataBar data={latestMeasurement} />
+      <DataBar
+        darkMode={darkMode}
+        data={latestMeasurement}
+      />
 
       <ChartPanel
         darkMode={darkMode}
