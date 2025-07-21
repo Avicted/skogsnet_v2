@@ -434,6 +434,7 @@ func TestWindDirectionToCompass(t *testing.T) {
 		degrees int
 		compass string
 	}{
+		// Main compass points
 		{0, "N"},
 		{45, "NE"},
 		{90, "E"},
@@ -442,8 +443,30 @@ func TestWindDirectionToCompass(t *testing.T) {
 		{225, "SW"},
 		{270, "W"},
 		{315, "NW"},
-		{337, "NW"},
 		{359, "N"},
+
+		// Boundaries between sectors
+		{22, "N"},   // Just before NE
+		{23, "NE"},  // Just after N
+		{67, "NE"},  // Just before E
+		{68, "E"},   // Just after NE
+		{112, "E"},  // Just before SE
+		{113, "SE"}, // Just after E
+		{157, "SE"}, // Just before S
+		{158, "S"},  // Just after SE
+		{202, "S"},  // Just before SW
+		{203, "SW"}, // Just after S
+		{247, "SW"}, // Just before W
+		{248, "W"},  // Just after SW
+		{292, "W"},  // Just before NW
+		{293, "NW"}, // Just after W
+		{337, "NW"}, // Just before N
+		{338, "N"},  // Just after NW
+
+		// Invalid cases
+		{-10, ""}, // Negative degrees
+		{360, ""}, // 360 degrees should be invalid
+		{400, ""}, // Greater than 360 degrees
 	}
 
 	for _, test := range tests {
