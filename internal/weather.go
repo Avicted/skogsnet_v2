@@ -205,7 +205,7 @@ func WindDirectionToCompass(deg int) string {
 	const offset = degPerDirection / 2.0
 	const directionsCount = 8
 
-	idx := int((float64(deg) + offset) / degPerDirection)
+	idx := int((float64(deg)+offset)/degPerDirection) % directionsCount
 
 	return directions[idx]
 }

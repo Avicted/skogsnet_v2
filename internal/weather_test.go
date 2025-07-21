@@ -442,6 +442,8 @@ func TestWindDirectionToCompass(t *testing.T) {
 		{225, "SW"},
 		{270, "W"},
 		{315, "NW"},
+		{337, "NW"},
+		{359, "N"},
 	}
 
 	for _, test := range tests {
